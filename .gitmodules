@@ -1,0 +1,3 @@
+[submodule "packages/coinray-chart"]
+	path = packages/coinray-chart
+	url = git@github.com:coinrayio/coinray-chart.git
