@@ -1,0 +1,85 @@
+.cr-setting-floating {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: auto;
+  user-select: none;
+
+  .cr-floating-inner {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    gap: 6px;
+    padding: 6px;
+    background: var(--superchart-background-color);
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    align-items: center;
+    .drag-handle {
+      width: 10px;
+      height: 34px;
+      cursor: move;
+      margin-left: 4px;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
+    .cr-action {
+      position: relative;
+      display: flex;
+      align-items: center;
+      flex-direction: row;
+      .cr-action-btn {
+        display: flex;
+        flex-direction: column;
+        width: 34px;
+        height: 34px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        cursor: pointer;
+        background: transparent;
+        transition: background 150ms;
+        &:hover { background: var(--superchart-hover-background-color); }
+        .cr-action-icon {
+          color: var(--superchart-text-color, #fff);
+          // svg {
+          //   height: 16px;
+          //   width: 16px;
+          // }
+        }
+        .cr-action-label {
+          height: 4px;
+          width: 26px;
+          margin-top: 5px;
+          font-size: 8px;
+          color: var(--superchart-text-color, #fff);
+          border-radius: 1px;
+        }
+      }
+
+      .cr-editor {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        background: #0b0b0c;
+        padding: 6px;
+        border-radius: 6px;
+        box-shadow: 0 6px 18px var(--superchart-background-color);
+        display: flex;
+        gap: 6px;
+        input[type="color"] { width: 36px; height: 28px; border: none; padding: 0; background: transparent; cursor: pointer; }
+        input[type="number"], select {
+          background: rgba(255,255,255,0.06);
+          color: #fff;
+          border: 1px solid var(--superchart-background-color);
+          padding: 4px 6px;
+          border-radius: 4px;
+          width: 80px;
+        }
+      }
+    }
+  }
+}

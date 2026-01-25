@@ -1,0 +1,129 @@
+@import (reference) '../../../base.less';
+
+.overlay-options-popup {
+	button {
+		padding: 6px;
+		color: var(--superchart-primary-color);
+		text-align: left;
+
+		&:hover {
+			background: var(--superchart-primary-color);
+			color: white;
+		}
+	}
+
+	table.overlay-menu {
+		border-collapse: collapse;
+		width: 100%;
+		font-size: 13px;
+		color: var(--superchart-text-color);
+
+		tbody tr {
+			cursor: pointer;
+
+			td {
+				padding: 6px 9px;
+				vertical-align: middle;
+			}
+
+			&:hover {
+				background: rgba(255, 255, 255, 0.02);
+			}
+		}
+
+		color: var(--superchart-text-color);
+
+		.icon-cell {
+			width: 28px;
+			text-align: center;
+			color: var(--superchart-text-color);
+		}
+
+		.inline-icon {
+			svg {
+				fill: currentColor;
+				color: inherit;
+				height: 11px;
+				width: 8px;
+			}
+		}
+
+		.row-content,
+		.label,
+		table.overlay-menu td {
+			color: var(--superchart-text-color);
+		}
+
+		tr.divider-after {
+			border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		}
+
+		tr.divider-after td {
+			padding-bottom: 10px;
+		}
+
+		.label {
+			min-width: 160px;
+
+			.flex-row {
+				display: flex;
+				flex-direction: row;
+				justify-content: space-between;
+				gap: 6px;
+			}
+		}
+	}
+
+	.shortcut-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 8px;
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.03);
+		color: rgba(255, 255, 255, 0.65);
+		font-size: 12px;
+		filter: blur(0.6px);
+		opacity: 0.8;
+	}
+
+	.shortcut-pill .key {
+		display: inline-block;
+		padding: 2px 6px;
+		border-radius: 3px;
+		background: rgba(0, 0, 0, 0.18);
+		color: rgba(255, 255, 255, 0.85);
+		font-weight: 600;
+	}
+
+	.shortcut-pill .plus {
+		opacity: 0.6;
+	}
+
+	.submenu {
+		position: fixed;
+		min-width: 180px;
+		background: var(--superchart-popover-background-color);
+		border-radius: 6px;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+		padding: 6px;
+		z-index: 10050;
+
+		ul {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+
+			li {
+				padding: 8px 10px;
+				border-radius: 4px;
+				cursor: pointer;
+				color: var(--superchart-text-color);
+
+				&:hover {
+					background: rgba(255, 255, 255, 0.03);
+				}
+			}
+		}
+	}
+}
