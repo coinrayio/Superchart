@@ -5,6 +5,8 @@
 import PeriodBar from './period-bar'
 import DrawingBar from './drawing-bar'
 import IndicatorModal from './indicator-modal'
+import IndicatorSettingModal from './indicator-setting-modal'
+import TimeframeModal from './timeframe-modal'
 import TimezoneModal from './timezone-modal'
 import SettingModal from './setting-modal'
 import ScreenshotModal from './screenshot-modal'
@@ -15,6 +17,8 @@ export {
   PeriodBar,
   DrawingBar,
   IndicatorModal,
+  IndicatorSettingModal,
+  TimeframeModal,
   TimezoneModal,
   SettingModal,
   ScreenshotModal,
@@ -26,6 +30,8 @@ export {
 export type { PeriodBarProps, Period, SymbolInfo } from './period-bar'
 export type { DrawingBarProps } from './drawing-bar'
 export type { IndicatorModalProps } from './indicator-modal'
+export type { IndicatorSettingModalProps, IndicatorSettingParams } from './indicator-setting-modal'
+export type { TimeframeModalProps } from './timeframe-modal'
 export type { TimezoneModalProps } from './timezone-modal'
 export type { SettingModalProps } from './setting-modal'
 export type { ScreenshotModalProps } from './screenshot-modal'

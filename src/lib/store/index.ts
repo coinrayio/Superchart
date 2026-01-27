@@ -3,3 +3,7 @@
  */
 
 export * from './chartStore'
+export * from './tickStore'
+export * from './overlaySettingStore'
+export * from './keyEventStore'
+export * from './chartStateStore'

@@ -3,12 +3,76 @@
 .@{prefix-cls}-timeframe-modal-input {
   margin: 20px 0 10px 0;
   height: 40px;
+
   svg {
     width: 18px;
     height: 18px;
     fill: var(--superchart-text-second-color);
   }
+
   .value {
     font-size: 16px;
+  }
+
+  &.input-error {
+    .@{prefix-cls}-input {
+      border-color: var(--superchart-danger-color, #ff4d4f);
+    }
+  }
+}
+
+.@{prefix-cls}-timeframe-modal-match {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--superchart-text-color);
+}
+
+.@{prefix-cls}-timeframe-modal-match-label {
+  font-size: 12px;
+  color: var(--superchart-text-second-color);
+}
+
+.@{prefix-cls}-timeframe-modal-match-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--superchart-primary-color, #1677ff);
+}
+
+.@{prefix-cls}-timeframe-modal-hint {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--superchart-border-color);
+
+  > span {
+    display: block;
+    font-size: 12px;
+    color: var(--superchart-text-second-color);
+    margin-bottom: 8px;
+  }
+}
+
+.@{prefix-cls}-timeframe-modal-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.@{prefix-cls}-timeframe-modal-example {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  background: var(--superchart-bg-second);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--superchart-text-color);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--superchart-primary-color, #1677ff);
+    color: #fff;
   }
 }

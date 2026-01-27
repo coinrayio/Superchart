@@ -1,91 +1,30 @@
-// Superchart - Advanced Charting Library UI (Framework-agnostic)
+/**
+ * Superchart - Advanced Charting Library UI
+ *
+ * A TradingView-grade charting UI library built on klinecharts.
+ */
 
-// Main export - the class-based Superchart API
-export { default as Superchart, Superchart as SuperchartClass } from './components/Superchart'
-export type { SuperchartOptions, SuperchartApi } from './components/Superchart'
+import { registerOverlay } from 'klinecharts'
 
-// Export types
-export * from './types'
+import overlays from './extension'
+import Superchart from './components/Superchart'
+import { load } from './i18n'
 
-// Export store for advanced usage
-export * as store from './store'
-export type { PaneProperties } from './store/chartStore'
-
-// Export hooks for React users who need them
-export { useChartState } from './hooks/useChartState'
-export type { UseChartStateOptions } from './hooks/useChartState'
-
-// Re-export internal components for advanced usage
-export { ChartWidget } from './components/ChartWidget'
-export type { ChartWidgetProps, ChartWidgetRef } from './components/ChartWidget'
-export { SuperchartComponent } from './components/SuperchartComponent'
-export type { SuperchartComponentProps } from './components/SuperchartComponent'
-
-// Export widgets (UI components)
-export {
-  PeriodBar,
-  DrawingBar,
-  IndicatorModal,
-  TimezoneModal,
-  SettingModal,
-  ScreenshotModal,
-  SymbolSearchModal,
-  SettingFloating,
-} from './widget'
-export type {
-  PeriodBarProps,
-  Period,
-  SymbolInfo,
-  DrawingBarProps,
-  IndicatorModalProps,
-  TimezoneModalProps,
-  SettingModalProps,
-  ScreenshotModalProps,
-  SymbolSearchModalProps,
-  SymbolSearchDatafeed,
-  FloatingProps,
-  FloatingAction,
-} from './widget'
-
-// Export base components
-export {
-  Button,
-  Checkbox,
-  Color,
-  Empty,
-  Input,
-  List,
-  Loading,
-  Modal,
-  Popup,
-  GenericPopup,
-  Select,
-  Switch,
-} from './component'
-export type {
-  ButtonProps,
-  ButtonType,
-  CheckboxProps,
-  ColorProps,
-  EmptyProps,
-  InputProps,
-  ListProps,
-  ListDataSourceItem,
-  LoadingProps,
-  ModalProps,
-  ModalButton,
-  PopupProps,
-  SelectProps,
-  SelectDataSourceItem,
-  SwitchProps,
-} from './component'
-
-// Export i18n
-export { default as i18n, load as loadLocale } from './i18n'
-
-// Export helpers
-export { getScreenSize, getPrecision, convertFontWeightNameToNumber } from './helpers'
-export type { FontWeights } from './helpers'
-
-// Import styles
 import './index.less'
+
+// Register all custom overlays
+overlays.forEach(o => { registerOverlay(o) })
+
+// Main class export
+export { Superchart }
+
+// i18n
+export { load as loadLocale }
+
+// Types - only export what consumers need
+export type { SuperchartOptions, SuperchartApi } from './components/Superchart'
+export type { Period, SymbolInfo, ProChart } from './types/chart'
+export type { StorageAdapter, ChartState } from './types/storage'
+export type { IndicatorProvider, IndicatorDefinition } from './types/indicator'
+export type { OverlayProperties, ProOverlay, ProOverlayCreate } from './types/overlay'
+export type { PaneProperties } from './store/chartStore'
