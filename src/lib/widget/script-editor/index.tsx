@@ -160,7 +160,8 @@ export function ScriptEditor({
             const { createLanguageExtension } = await import('./languageAdapter')
             const langExts = createLanguageExtension(language ?? defaultScriptLanguage)
             extensions.push(...langExts)
-          } catch {
+          } catch (error) {
+            console.info('[ScriptEditor] Language adapter import failed: — continue without syntax highlighting', error)
             // Language adapter import failed — continue without syntax highlighting
           }
         }
