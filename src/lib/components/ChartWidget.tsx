@@ -19,6 +19,7 @@ import {
 } from 'klinecharts'
 import * as store from '../store/chartStore'
 import { useChartState } from '../hooks/useChartState'
+import { useBackendIndicators, type UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { Period, SymbolInfo } from '../types/chart'
 
 export interface ChartWidgetProps {
@@ -34,6 +35,8 @@ export interface ChartWidgetProps {
     feature: TooltipFeatureStyle
     indicator: Indicator
   }) => void
+  /** Callback to expose backend indicator API to parent */
+  onBackendIndicatorsReady?: (api: UseBackendIndicatorsReturn) => void
 }
 
 export interface ChartWidgetRef {
@@ -57,7 +60,7 @@ function useStoreValue<T>(
  * Internal chart widget component
  */
 export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
-  ({ dataLoader, watermark, styleOverrides, onIndicatorTooltipFeatureClick }, ref) => {
+  ({ dataLoader, watermark, styleOverrides, onIndicatorTooltipFeatureClick, onBackendIndicatorsReady }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const priceUnitRef = useRef<HTMLSpanElement | null>(null)
 
@@ -72,6 +75,14 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
     useStoreValue(store.instanceApi, store.subscribeInstanceApi)
 
     const { createIndicator, restoreChartState } = useChartState()
+
+    // Backend indicator management
+    const backendIndicators = useBackendIndicators()
+
+    // Expose backend indicator API to parent
+    useEffect(() => {
+      onBackendIndicatorsReady?.(backendIndicators)
+    }, [onBackendIndicatorsReady, backendIndicators])
 
     // Track previous symbol/period for change detection
     const prevSymbolPeriodRef = useRef<{ symbol: SymbolInfo | null; period: Period | null }>({
@@ -244,6 +255,9 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
       // Restore saved state
       restoreChartState()
 
+      // Restore backend indicators from storage (after chart state)
+      backendIndicators.restoreBackendIndicators()
+
       // Set symbol and period from store
       const currentSymbol = store.symbol()
       const currentPeriod = store.period()
@@ -286,6 +300,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
 
       // Cleanup on unmount
       return () => {
+        backendIndicators.disposeAll()
         window.removeEventListener('resize', handleResize)
         if (containerRef.current) {
           dispose(containerRef.current)
@@ -354,6 +369,11 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
             priceUnitRef.current.style.display = 'none'
           }
         }
+      }
+
+      // Resubscribe backend indicators on symbol/period change
+      if (prev.symbol && prev.period) {
+        backendIndicators.handleSymbolPeriodChange()
       }
 
       prevSymbolPeriodRef.current = { symbol, period }

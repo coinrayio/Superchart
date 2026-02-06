@@ -106,7 +106,6 @@ export type {
   ProOverlay,
   ProOverlayCreate,
   ProOverlayTemplate,
-  OverlayEventListenerParams,
   SavedOverlayPoint,
   SavedOverlay,
   OverlayCategory,
@@ -156,3 +155,53 @@ export type {
   SettingOption,
   ActiveIndicator,
 } from './indicator'
+
+// =============================================================================
+// Order Line types (for price-level overlays)
+// Re-exported from klinecharts (coinray-chart)
+// =============================================================================
+
+export type {
+  OrderLineProperties,
+  OrderLine,
+  OrderLineStyle,
+  OrderLineEventListener,
+} from './overlay'
+
+// =============================================================================
+// Datafeed types (TradingView-compatible data loading)
+// =============================================================================
+
+export type {
+  Datafeed,
+  DatafeedConfiguration,
+  LibrarySymbolInfo,
+  Bar,
+  PeriodParams,
+  HistoryMetadata,
+  SearchSymbolResult,
+} from './datafeed'
+
+export {
+  resolutionToPeriod,
+  periodToResolution,
+} from './datafeed'
+
+// =============================================================================
+// Script types (script editor + server-side execution)
+// =============================================================================
+
+export type {
+  ScriptProvider,
+  ScriptLanguageDefinition,
+  ScriptBuiltinFunction,
+  ScriptBuiltinVariable,
+  ScriptFunctionParameter,
+  ScriptCompileResult,
+  ScriptDiagnostic,
+  ScriptExecuteParams,
+  BotSubscription,
+  BotSignal,
+  ScriptInfo,
+  ScriptSaveParams,
+} from './script'

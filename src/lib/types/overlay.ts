@@ -1,7 +1,8 @@
 /**
  * Overlay types - extends base klinecharts overlay types
  *
- * Import overlay types from coinray-chart and only add extensions.
+ * Core overlay types are now in coinray-chart. This file only contains
+ * superchart-specific types for persistence and UI organization.
  */
 
 // Re-export base overlay types from coinray-chart
@@ -14,75 +15,40 @@ export type {
   OverlayEvent,
   OverlayFilter,
   OverlayStyle,
+  // Pro overlay types from coinray-chart
+  OverlayProperties,
+  ProOverlayTemplate,
+  OverlayPropertiesStore,
+  OrderLineProperties,
+  OrderLine,
+  OrderLineStyle,
+  OrderLineEventListener,
 } from 'klinecharts'
 
-import type {
-  DeepPartial,
-  LineType,
-  PolygonType,
-  Overlay,
-  OverlayCreate,
-  OverlayTemplate,
-  OverlayEvent,
-  Point,
+// Re-export pro overlay utilities from coinray-chart
+export {
+  createOrderLine,
+  isProOverlayTemplate,
+  createPropertiesStore,
+  DEFAULT_OVERLAY_PROPERTIES,
 } from 'klinecharts'
+
+import type { DeepPartial, Point, OverlayProperties, Overlay, OverlayCreate } from 'klinecharts'
 
 /**
- * Extended overlay properties for styling (following coinray-chart-ui pattern)
+ * ProOverlay - An overlay with property management methods
+ * Created by ProOverlayTemplate factories
  */
-export interface OverlayProperties {
-  style: PolygonType
-  text: string
-  textColor: string
-  textFont: string
-  textFontSize: number
-  textFontWeight: number | string
-  textBackgroundColor: string
-  textPaddingLeft: number
-  textPaddingRight: number
-  textPaddingTop: number
-  textPaddingBottom: number
-  lineColor: string
-  lineWidth: number
-  lineStyle: LineType
-  lineLength: number
-  lineDashedValue: number[]
-  tooltip: string
-  backgroundColor: string
-  borderStyle: LineType
-  borderColor: string
-  borderWidth: number
+export interface ProOverlay extends Overlay {
+  setProperties(properties: DeepPartial<OverlayProperties>, id: string): void
+  getProperties(id: string): DeepPartial<OverlayProperties>
 }
 
 /**
- * Extended overlay with property management
+ * ProOverlayCreate - Create options for a ProOverlay
  */
-export type ProOverlay = Overlay & {
-  setProperties: (properties: DeepPartial<OverlayProperties>, id: string) => void
-  getProperties: (id: string) => DeepPartial<OverlayProperties>
-}
-
-/**
- * Extended overlay create with properties
- */
-export type ProOverlayCreate = OverlayCreate & {
+export interface ProOverlayCreate extends OverlayCreate {
   properties?: DeepPartial<OverlayProperties>
-}
-
-/**
- * Extended overlay template with property management
- */
-export interface ProOverlayTemplate extends OverlayTemplate {
-  setProperties?: (properties: DeepPartial<OverlayProperties>, id: string) => void
-  getProperties?: (id: string) => DeepPartial<OverlayProperties>
-}
-
-/**
- * Overlay event listener params (for callbacks)
- */
-export interface OverlayEventListenerParams {
-  params: unknown
-  callback: (params: unknown, event?: OverlayEvent<unknown>) => void
 }
 
 /**
@@ -140,13 +106,22 @@ export const BUILT_IN_OVERLAYS = [
   'triangle',
   'parallelogram',
   'arc',
+  'arrow',
+  'brush',
   // Annotations
   'simpleAnnotation',
   'simpleTag',
   // Waves
-  'wave',
+  'threeWaves',
+  'fiveWaves',
+  'eightWaves',
+  'anyWaves',
   'abcd',
   'xabcd',
+  // Gann
+  'gannBox',
+  // Order line
+  'orderLine',
 ] as const
 
 /**
@@ -182,7 +157,7 @@ export const OVERLAY_CATEGORIES: OverlayCategory[] = [
   {
     id: 'shapes',
     name: 'Shapes',
-    overlays: ['rect', 'circle', 'triangle', 'parallelogram', 'arc'],
+    overlays: ['rect', 'circle', 'triangle', 'parallelogram', 'arc', 'arrow', 'brush'],
   },
   {
     id: 'annotations',
@@ -192,7 +167,12 @@ export const OVERLAY_CATEGORIES: OverlayCategory[] = [
   {
     id: 'waves',
     name: 'Waves',
-    overlays: ['wave', 'abcd', 'xabcd'],
+    overlays: ['threeWaves', 'fiveWaves', 'eightWaves', 'anyWaves', 'abcd', 'xabcd'],
+  },
+  {
+    id: 'gann',
+    name: 'Gann',
+    overlays: ['gannBox'],
   },
 ]
 

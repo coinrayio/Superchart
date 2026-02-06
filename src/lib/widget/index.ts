@@ -12,6 +12,7 @@ import SettingModal from './setting-modal'
 import ScreenshotModal from './screenshot-modal'
 import SymbolSearchModal from './symbol-search-modal'
 import SettingFloating from './setting-floating'
+import { ScriptEditor } from './script-editor'
 
 export {
   PeriodBar,
@@ -24,6 +25,7 @@ export {
   ScreenshotModal,
   SymbolSearchModal,
   SettingFloating,
+  ScriptEditor,
 }
 
 // Re-export types
@@ -37,3 +39,4 @@ export type { SettingModalProps } from './setting-modal'
 export type { ScreenshotModalProps } from './screenshot-modal'
 export type { SymbolSearchModalProps, SymbolSearchDatafeed } from './symbol-search-modal'
 export type { FloatingProps, FloatingAction } from './setting-floating'
+export type { ScriptEditorProps } from './script-editor'

@@ -152,5 +152,17 @@
   "BIAS2": "BIAS 2",
   "BIAS3": "BIAS 3",
   "BIAS4": "BIAS 4",
-  "BIAS5": "BIAS 5"
+  "BIAS5": "BIAS 5",
+
+  "script_editor": "Script Editor",
+  "add_to_chart": "Add to Chart",
+  "run_as_bot": "Run as Bot",
+  "compile": "Compile",
+  "save_script": "Save Script",
+  "compilation_success": "Compiled successfully",
+  "compilation_failed": "Compilation failed",
+  "line": "Line",
+  "font_size": "Font Size",
+  "output": "Output",
+  "compilation_output_placeholder": "Compilation output will appear here"
 }

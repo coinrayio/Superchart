@@ -23,7 +23,9 @@ import { SuperchartComponent } from './SuperchartComponent'
 import type { Period, SymbolInfo } from '../types/chart'
 import type { StorageAdapter } from '../types/storage'
 import type { IndicatorProvider } from '../types/indicator'
+import type { ScriptProvider } from '../types/script'
 import type { OverlayProperties } from '../types/overlay'
+import type { UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { PaneProperties } from '../store/chartStore'
 import * as store from '../store/chartStore'
 
@@ -64,6 +66,10 @@ export interface SuperchartOptions {
   watermark?: string | Node
   /** Style overrides */
   styleOverrides?: DeepPartial<Styles>
+
+  // Optional - Script execution
+  /** Provider for server-side script compilation and execution */
+  scriptProvider?: ScriptProvider
 
   // Optional - UI toggles
   /** Show drawing toolbar (default: false) */
@@ -111,6 +117,8 @@ export interface SuperchartApi {
   createOverlay: (overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> }, paneId?: string) => string | null
   /** Set overlay mode */
   setOverlayMode: (mode: OverlayMode) => void
+  /** Get the backend indicators API (null if no IndicatorProvider configured) */
+  getBackendIndicators: () => UseBackendIndicatorsReturn | null
   /** Dispose the chart */
   dispose: () => void
 }
@@ -171,6 +179,14 @@ export default class Superchart implements SuperchartApi {
       store.setStorageAdapter(options.storageAdapter)
     }
     store.setStorageKey(options.storageKey ?? options.symbol.ticker)
+
+    if (options.indicatorProvider) {
+      store.setIndicatorProvider(options.indicatorProvider)
+    }
+
+    if (options.scriptProvider) {
+      store.setScriptProvider(options.scriptProvider)
+    }
 
     if (options.subIndicators) {
       const subIndicatorsRecord: Record<string, string> = {}
@@ -275,10 +291,25 @@ export default class Superchart implements SuperchartApi {
     this._api?.setOverlayMode(mode)
   }
 
+  getBackendIndicators(): UseBackendIndicatorsReturn | null {
+    return this._api?.getBackendIndicators() ?? null
+  }
+
   /**
    * Dispose the chart and cleanup resources
    */
   dispose(): void {
+    // Dispose providers before unmounting
+    const provider = store.indicatorProvider()
+    if (provider?.dispose) {
+      provider.dispose()
+    }
+
+    const scriptProv = store.scriptProvider()
+    if (scriptProv?.dispose) {
+      scriptProv.dispose()
+    }
+
     if (this._root) {
       this._root.unmount()
       this._root = null

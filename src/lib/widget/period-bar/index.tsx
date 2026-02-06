@@ -7,21 +7,10 @@ import { isString } from 'lodash'
 import i18n from '../../i18n'
 import { getScreenSize } from '../../helpers'
 
-export interface SymbolInfo {
-  ticker: string
-  name?: string
-  shortName?: string
-  logo?: string
-  exchange?: string
-  pricePrecision?: number
-  volumePrecision?: number
-}
+import type { SymbolInfo as ChartSymbolInfo, Period as ChartPeriod } from '../../types/chart'
 
-export interface Period {
-  multiplier: number
-  timespan: string
-  text: string
-}
+export type SymbolInfo = ChartSymbolInfo
+export type Period = ChartPeriod
 
 export interface PeriodBarProps {
   locale: string

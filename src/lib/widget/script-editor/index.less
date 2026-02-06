@@ -1,0 +1,177 @@
+@import '../../base.less';
+
+.superchart-script-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 480px;
+
+  .superchart-se-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+
+    .superchart-se-toolbar-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--superchart-text-second-color);
+      letter-spacing: 0.5px;
+    }
+
+    .superchart-se-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .superchart-se-font-size {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--superchart-text-second-color);
+
+      select {
+        background: var(--superchart-popup-bg-color);
+        border: 1px solid var(--superchart-border-color);
+        border-radius: 3px;
+        color: var(--superchart-text-color);
+        padding: 2px 4px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+    }
+  }
+
+  .superchart-se-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 10px;
+  }
+
+  .superchart-se-editor {
+    flex: 6;
+    min-width: 0;
+    border: 1px solid var(--superchart-border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+
+    .superchart-se-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--superchart-text-second-color);
+      font-size: 13px;
+    }
+
+    .superchart-se-cm-container {
+      height: 100%;
+      .cm-editor {
+        height: 100%;
+      }
+    }
+
+    .superchart-se-textarea-wrapper {
+      display: flex;
+      height: 100%;
+    }
+
+    .superchart-se-line-numbers {
+      padding: 8px 4px;
+      background: var(--superchart-popup-bg-color);
+      border-right: 1px solid var(--superchart-border-color);
+      text-align: right;
+      user-select: none;
+      overflow: hidden;
+
+      .superchart-se-line-number {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--superchart-text-second-color);
+        padding: 0 8px 0 4px;
+        min-width: 32px;
+      }
+    }
+
+    .superchart-se-textarea {
+      flex: 1;
+      resize: none;
+      border: none;
+      outline: none;
+      padding: 8px;
+      background: transparent;
+      color: var(--superchart-text-color);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+      line-height: 1.5;
+      tab-size: 2;
+    }
+  }
+
+  .superchart-se-output {
+    flex: 4;
+    min-width: 200px;
+    border: 1px solid var(--superchart-border-color);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    .superchart-se-output-header {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--superchart-text-second-color);
+      border-bottom: 1px solid var(--superchart-border-color);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .superchart-se-output-content {
+      flex: 1;
+      padding: 8px 10px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .superchart-se-diagnostics {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .superchart-se-diagnostic {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .superchart-se-diag-location {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    .superchart-se-errors .superchart-se-diag-message {
+      color: #ff6b6b;
+    }
+
+    .superchart-se-warnings .superchart-se-diag-message {
+      color: #ffa94d;
+    }
+
+    .superchart-se-success {
+      color: #51cf66;
+    }
+
+    .superchart-se-placeholder {
+      color: var(--superchart-text-second-color);
+      font-style: italic;
+    }
+  }
+}

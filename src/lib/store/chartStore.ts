@@ -8,6 +8,8 @@
 import type { Chart, DeepPartial, Nullable, Styles, Overlay } from 'klinecharts'
 import type { Period, SymbolInfo } from '../types/chart'
 import type { StorageAdapter } from '../types/storage'
+import type { IndicatorProvider } from '../types/indicator'
+import type { ScriptProvider } from '../types/script'
 
 // Simple observable store implementation
 type Listener<T> = (value: T) => void
@@ -69,6 +71,12 @@ export const [selectedOverlay, setSelectedOverlay, subscribeSelectedOverlay] = c
 export const [storageAdapter, setStorageAdapter, subscribeStorageAdapter] = createSignal<Nullable<StorageAdapter>>(null)
 export const [storageKey, setStorageKey, subscribeStorageKey] = createSignal<string>('')
 
+// Backend indicator provider
+export const [indicatorProvider, setIndicatorProvider, subscribeIndicatorProvider] = createSignal<Nullable<IndicatorProvider>>(null)
+
+// Script provider (server-side script execution)
+export const [scriptProvider, setScriptProvider, subscribeScriptProvider] = createSignal<Nullable<ScriptProvider>>(null)
+
 // Chart state modification tracking
 export const [chartModified, setChartModified, subscribeChartModified] = createSignal<boolean>(false)
 
@@ -99,6 +107,8 @@ export function resetStore(): void {
   setSelectedOverlay(null)
   setStorageAdapter(null)
   setStorageKey('')
+  setIndicatorProvider(null)
+  setScriptProvider(null)
   setChartModified(false)
   setRootElementId('')
   setLocale('en-US')
@@ -123,6 +133,8 @@ export const storeSubscriptions = {
   selectedOverlay: subscribeSelectedOverlay,
   storageAdapter: subscribeStorageAdapter,
   storageKey: subscribeStorageKey,
+  indicatorProvider: subscribeIndicatorProvider,
+  scriptProvider: subscribeScriptProvider,
   chartModified: subscribeChartModified,
   rootElementId: subscribeRootElementId,
   locale: subscribeLocale,

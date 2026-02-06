@@ -121,5 +121,17 @@
   "log": "对数",
   "reverse_coordinate": "反转坐标",
   "grid_show": "显示网格",
-  "restore_default": "恢复默认"
+  "restore_default": "恢复默认",
+
+  "script_editor": "脚本编辑器",
+  "add_to_chart": "添加到图表",
+  "run_as_bot": "作为机器人运行",
+  "compile": "编译",
+  "save_script": "保存脚本",
+  "compilation_success": "编译成功",
+  "compilation_failed": "编译失败",
+  "line": "行",
+  "font_size": "字体大小",
+  "output": "输出",
+  "compilation_output_placeholder": "编译输出将显示在这里"
 }

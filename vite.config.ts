@@ -14,7 +14,11 @@ export default defineConfig({
       fileName: (format) => `superchart.${format}.js`,
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', 'klinecharts'],
+      external: [
+            'react', 'react-dom', 'react/jsx-runtime', 'klinecharts',
+            /^@codemirror\//,
+            /^@lezer\//,
+          ],
       output: {
         assetFileNames: (chunkInfo) => {
           if (chunkInfo.name === 'style.css') {
