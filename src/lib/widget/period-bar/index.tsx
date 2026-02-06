@@ -24,6 +24,7 @@ export interface PeriodBarProps {
   onSymbolClick?: () => void
   onPeriodChange: (period: Period) => void
   onIndicatorClick: () => void
+  onScriptClick?: () => void
   onTimezoneClick: () => void
   onSettingClick: () => void
   onScreenshotClick: () => void
@@ -42,6 +43,7 @@ export function PeriodBar({
   onSymbolClick,
   onPeriodChange,
   onIndicatorClick,
+  onScriptClick,
   onTimezoneClick,
   onSettingClick,
   onScreenshotClick,
@@ -179,6 +181,15 @@ export function PeriodBar({
         </svg>
         <span>{i18n('indicator', locale)}</span>
       </div>
+
+      {onScriptClick && (
+        <div className="item tools" onClick={onScriptClick}>
+          <svg viewBox="0 0 20 20">
+            <path d="M3.33333,20L16.6667,20C18.5,20,20,18.5,20,16.6667L20,3.33333C20,1.5,18.5,0,16.6667,0L3.33333,0C1.5,0,0,1.5,0,3.33333L0,16.6667C0,18.5,1.5,20,3.33333,20ZM1.66667,3.33333C1.66667,2.41667,2.41667,1.66667,3.33333,1.66667L16.6667,1.66667C17.5833,1.66667,18.3333,2.41667,18.3333,3.33333L18.3333,16.6667C18.3333,17.5833,17.5833,18.3333,16.6667,18.3333L3.33333,18.3333C2.41667,18.3333,1.66667,17.5833,1.66667,16.6667L1.66667,3.33333ZM6.66667,6.66667L5,5L8.33333,10L5,15L6.66667,13.3333L9.16667,10L6.66667,6.66667ZM10.8333,13.3333L14.1667,13.3333L14.1667,15L10.8333,15L10.8333,13.3333Z" />
+          </svg>
+          <span>{i18n('script', locale)}</span>
+        </div>
+      )}
 
       <div className="item tools" onClick={onTimezoneClick}>
         <svg width="20" height="20" viewBox="0 0 20 20">

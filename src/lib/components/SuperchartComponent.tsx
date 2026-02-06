@@ -37,6 +37,7 @@ import SettingModal from '../widget/setting-modal'
 import ScreenshotModal from '../widget/screenshot-modal'
 import SymbolSearchModal from '../widget/symbol-search-modal'
 import SettingFloating from '../widget/setting-floating'
+import { ScriptEditor } from '../widget/script-editor'
 import { Loading } from '../component'
 
 export interface SuperchartComponentProps {
@@ -121,6 +122,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const [settingModalVisible, setSettingModalVisible] = useState(false)
   const [screenshotUrl, setScreenshotUrl] = useState('')
   const [symbolSearchModalVisible, setSymbolSearchModalVisible] = useState(false)
+  const [scriptEditorVisible, setScriptEditorVisible] = useState(false)
   const [indicatorSettingModalParams, setIndicatorSettingModalParams] = useState<{
     visible: boolean
     indicatorName: string
@@ -147,6 +149,9 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const handleBackendIndicatorsReady = useCallback((api: UseBackendIndicatorsReturn) => {
     setBackendApi(api)
   }, [])
+
+  // Check if script provider is available
+  const scriptProvider = store.scriptProvider()
 
   // Update timezone text when locale changes
   useEffect(() => {
@@ -319,6 +324,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
         onSymbolClick={() => setSymbolSearchModalVisible(!symbolSearchModalVisible)}
         onPeriodChange={(newPeriod) => store.setPeriod(newPeriod)}
         onIndicatorClick={() => setIndicatorModalVisible(!indicatorModalVisible)}
+        onScriptClick={scriptProvider ? () => setScriptEditorVisible(!scriptEditorVisible) : undefined}
         onTimezoneClick={() => setTimezoneModalVisible(!timezoneModalVisible)}
         onSettingClick={() => setSettingModalVisible(!settingModalVisible)}
         onScreenshotClick={() => {
@@ -554,6 +560,27 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
               paneId: '',
               calcParams: [],
             })
+          }}
+        />
+      )}
+
+      {scriptEditorVisible && scriptProvider && (
+        <ScriptEditor
+          locale={locale}
+          onClose={() => setScriptEditorVisible(false)}
+          onAddToChart={async (code) => {
+            try {
+              // Compile the script
+              const result = await scriptProvider.compile(code, 'pine')
+
+              if (result.success && result.metadata?.name) {
+                // Add the indicator to the chart
+                createIndicator(result.metadata.name)
+                setScriptEditorVisible(false)
+              }
+            } catch (error) {
+              console.error('Script compilation failed:', error)
+            }
           }}
         />
       )}
