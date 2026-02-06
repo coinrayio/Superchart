@@ -1,12 +1,11 @@
 /**
- * ScriptEditor - Code editor widget for writing trading scripts
+ * ScriptEditor - Code editor panel for writing trading scripts (TradingView-style)
  *
  * Uses CodeMirror 6 when available (optional peer dependency).
  * Falls back to a plain textarea if CodeMirror is not installed.
  */
 
 import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
-import { Modal } from '../../component'
 import i18n from '../../i18n'
 import * as store from '../../store/chartStore'
 import type { ScriptLanguageDefinition, ScriptDiagnostic } from '../../types/script'
@@ -23,8 +22,14 @@ export interface ScriptEditorProps {
   initialCode?: string
   /** Compilation diagnostics to display */
   diagnostics?: ScriptDiagnostic[]
-  /** Called when modal closes */
-  onClose: () => void
+  /** Initial height in pixels (default: 300) */
+  initialHeight?: number
+  /** Minimum height in pixels (default: 150) */
+  minHeight?: number
+  /** Maximum height in pixels (default: 600) */
+  maxHeight?: number
+  /** Called when panel is minimized/closed */
+  onMinimize?: () => void
   /** Called when user clicks "Add to Chart" */
   onAddToChart?: (code: string) => void
   /** Called when user clicks "Run as Bot" */
@@ -58,7 +63,10 @@ export function ScriptEditor({
   editorExtensions,
   initialCode,
   diagnostics: externalDiagnostics,
-  onClose,
+  initialHeight = 300,
+  minHeight = 150,
+  maxHeight = 600,
+  onMinimize,
   onAddToChart,
   onRunAsBot,
   onSave,
@@ -71,10 +79,15 @@ export function ScriptEditor({
   const [output, setOutput] = useState('')
   const [diagnostics, setDiagnostics] = useState<ScriptDiagnostic[]>(externalDiagnostics ?? [])
   const [cmAvailable, setCmAvailable] = useState<boolean | null>(null) // null = loading
+  const [height, setHeight] = useState(initialHeight)
+  const [isResizing, setIsResizing] = useState(false)
 
+  const panelRef = useRef<HTMLDivElement>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const editorViewRef = useRef<unknown>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const resizeStartY = useRef<number>(0)
+  const resizeStartHeight = useRef<number>(0)
 
   // Update diagnostics when external diagnostics change
   useEffect(() => {
@@ -201,13 +214,43 @@ export function ScriptEditor({
         handleAddToChart()
       }
       if (e.key === 'Escape') {
-        onClose()
+        onMinimize?.()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSave, handleAddToChart, onClose])
+  }, [handleSave, handleAddToChart, onMinimize])
+
+  // Handle resize
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizeStartY.current = e.clientY
+    resizeStartHeight.current = height
+  }, [height])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = resizeStartY.current - e.clientY
+      const newHeight = Math.max(minHeight, Math.min(maxHeight, resizeStartHeight.current + deltaY))
+      setHeight(newHeight)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing, minHeight, maxHeight])
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newCode = e.target.value
@@ -221,28 +264,18 @@ export function ScriptEditor({
   const warnings = diagnostics.filter(d => d.severity === 'warning')
 
   return (
-    <Modal
-      title={i18n('script_editor', locale) || 'Script Editor'}
-      width={820}
-      buttons={[
-        ...(onSave ? [{
-          type: 'confirm' as const,
-          children: i18n('save_script', locale) || 'Save',
-          onClick: handleSave,
-        }] : []),
-        ...(onAddToChart ? [{
-          type: 'confirm' as const,
-          children: i18n('add_to_chart', locale) || 'Add to Chart',
-          onClick: handleAddToChart,
-        }] : []),
-        ...(onRunAsBot ? [{
-          type: 'confirm' as const,
-          children: i18n('run_as_bot', locale) || 'Run as Bot',
-          onClick: handleRunAsBot,
-        }] : []),
-      ]}
-      onClose={onClose}
+    <div
+      ref={panelRef}
+      className="superchart-script-editor-panel"
+      style={{ height: `${height}px` }}
     >
+      {/* Resize handle */}
+      <div
+        className="superchart-se-resize-handle"
+        onMouseDown={handleResizeStart}
+        style={{ cursor: isResizing ? 'ns-resize' : 'ns-resize' }}
+      />
+
       <div className="superchart-script-editor">
         {/* Toolbar */}
         <div className="superchart-se-toolbar">
@@ -261,6 +294,32 @@ export function ScriptEditor({
                 ))}
               </select>
             </label>
+
+            {/* Action buttons */}
+            {onSave && (
+              <button className="superchart-se-btn" onClick={handleSave}>
+                {i18n('save_script', locale) || 'Save'}
+              </button>
+            )}
+            {onAddToChart && (
+              <button className="superchart-se-btn superchart-se-btn-primary" onClick={handleAddToChart}>
+                {i18n('add_to_chart', locale) || 'Add to Chart'}
+              </button>
+            )}
+            {onRunAsBot && (
+              <button className="superchart-se-btn" onClick={handleRunAsBot}>
+                {i18n('run_as_bot', locale) || 'Run as Bot'}
+              </button>
+            )}
+
+            {/* Minimize button */}
+            {onMinimize && (
+              <button className="superchart-se-btn-icon" onClick={onMinimize} title="Minimize">
+                <svg width="16" height="16" viewBox="0 0 16 16">
+                  <path d="M2 8h12" stroke="currentColor" strokeWidth="2" fill="none"/>
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -340,7 +399,7 @@ export function ScriptEditor({
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
   )
 }
 

@@ -346,13 +346,24 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
         className="superchart-content"
         style={{
           display: 'flex',
+          flexDirection: 'column',
           flex: 1,
           minHeight: 0,
           position: 'relative',
         }}
       >
-        {/* Loading overlay */}
-        {loadingVisible && (
+        {/* Chart area */}
+        <div
+          className="superchart-chart-area"
+          style={{
+            display: 'flex',
+            flex: scriptEditorVisible ? '1 1 auto' : '1',
+            minHeight: 0,
+            position: 'relative',
+          }}
+        >
+          {/* Loading overlay */}
+          {loadingVisible && (
           <div
             className="superchart-loading"
             style={{
@@ -384,27 +395,53 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
           />
         )}
 
-        {/* Settings floating (for overlay editing) */}
-        {selectedOverlay && <SettingFloating locale={locale} />}
+          {/* Settings floating (for overlay editing) */}
+          {selectedOverlay && <SettingFloating locale={locale} />}
 
-        {/* Chart widget */}
-        <div
-          className="superchart-chart-container"
-          style={{
-            flex: 1,
-            minWidth: 0,
-            position: 'relative',
-          }}
-        >
-          <ChartWidget
-            ref={chartWidgetRef}
-            dataLoader={dataLoader}
-            watermark={watermark}
-            styleOverrides={styleOverrides}
-            onIndicatorTooltipFeatureClick={handleIndicatorTooltipFeatureClick}
-            onBackendIndicatorsReady={handleBackendIndicatorsReady}
-          />
+          {/* Chart widget */}
+          <div
+            className="superchart-chart-container"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              position: 'relative',
+            }}
+          >
+            <ChartWidget
+              ref={chartWidgetRef}
+              dataLoader={dataLoader}
+              watermark={watermark}
+              styleOverrides={styleOverrides}
+              onIndicatorTooltipFeatureClick={handleIndicatorTooltipFeatureClick}
+              onBackendIndicatorsReady={handleBackendIndicatorsReady}
+            />
+          </div>
         </div>
+
+        {/* Script editor panel at bottom */}
+        {scriptEditorVisible && scriptProvider && (
+          <ScriptEditor
+            locale={locale}
+            initialHeight={300}
+            minHeight={150}
+            maxHeight={600}
+            onMinimize={() => setScriptEditorVisible(false)}
+            onAddToChart={async (code) => {
+              try {
+                // Compile the script
+                const result = await scriptProvider.compile(code, 'pine')
+
+                if (result.success && result.metadata?.name) {
+                  // Add the indicator to the chart
+                  createIndicator(result.metadata.name)
+                  setScriptEditorVisible(false)
+                }
+              } catch (error) {
+                console.error('Script compilation failed:', error)
+              }
+            }}
+          />
+        )}
       </div>
 
       {/* Modals */}
@@ -560,27 +597,6 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
               paneId: '',
               calcParams: [],
             })
-          }}
-        />
-      )}
-
-      {scriptEditorVisible && scriptProvider && (
-        <ScriptEditor
-          locale={locale}
-          onClose={() => setScriptEditorVisible(false)}
-          onAddToChart={async (code) => {
-            try {
-              // Compile the script
-              const result = await scriptProvider.compile(code, 'pine')
-
-              if (result.success && result.metadata?.name) {
-                // Add the indicator to the chart
-                createIndicator(result.metadata.name)
-                setScriptEditorVisible(false)
-              }
-            } catch (error) {
-              console.error('Script compilation failed:', error)
-            }
           }}
         />
       )}
