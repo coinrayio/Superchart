@@ -14,6 +14,7 @@ import { tags } from '@lezer/highlight'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import type { Extension } from '@codemirror/state'
 import { hoverTooltip } from '@codemirror/view'
+import { linter, type Diagnostic } from '@codemirror/lint'
 
 import type { ScriptLanguageDefinition, ScriptBuiltinFunction, ScriptBuiltinVariable } from '../../types/script'
 
@@ -247,6 +248,95 @@ function createAutocompletion(def: ScriptLanguageDefinition): Extension {
 }
 
 /**
+ * Create linter extension that validates code in real-time
+ */
+function createScriptLinter(def: ScriptLanguageDefinition): Extension {
+  // Build lookup maps
+  const functionMap = new Map<string, ScriptBuiltinFunction>()
+  const keywordSet = new Set(def.keywords)
+
+  for (const fn of def.builtinFunctions) {
+    functionMap.set(fn.name, fn)
+  }
+
+  return linter((view) => {
+    const diagnostics: Diagnostic[] = []
+    const text = view.state.doc.toString()
+
+    // Simple function call pattern: functionName(...)
+    // Matches: functionName followed by (
+    const functionCallPattern = /([a-zA-Z_]\w*)\s*\(/g
+    let match: RegExpExecArray | null
+
+    while ((match = functionCallPattern.exec(text)) !== null) {
+      const functionName = match[1]
+      const startPos = match.index
+
+      // Skip if it's a keyword
+      if (keywordSet.has(functionName)) {
+        continue
+      }
+
+      // Check if function exists
+      const fn = functionMap.get(functionName)
+      if (!fn) {
+        diagnostics.push({
+          from: startPos,
+          to: startPos + functionName.length,
+          severity: 'error',
+          message: `Could not find function or function reference '${functionName}'`,
+        })
+        continue
+      }
+
+      // Find the closing parenthesis and count parameters
+      let parenDepth = 1
+      let pos = match.index + match[0].length
+      let paramCount = 0
+      let hasParams = false
+
+      while (pos < text.length && parenDepth > 0) {
+        const ch = text[pos]
+        if (ch === '(') {
+          parenDepth++
+        } else if (ch === ')') {
+          parenDepth--
+        } else if (ch === ',' && parenDepth === 1) {
+          paramCount++
+        } else if (parenDepth === 1 && ch.trim() && ch !== '(' && ch !== ')' && !hasParams) {
+          hasParams = true
+          paramCount = 1
+        }
+        pos++
+      }
+
+      // Validate parameter count
+      const params = fn.parameters ?? []
+      const requiredParams = params.filter(p => !p.optional).length
+      const totalParams = params.length
+
+      if (paramCount < requiredParams) {
+        diagnostics.push({
+          from: startPos,
+          to: startPos + functionName.length,
+          severity: 'error',
+          message: `Function '${functionName}' requires ${requiredParams} parameter(s), but got ${paramCount}`,
+        })
+      } else if (paramCount > totalParams) {
+        diagnostics.push({
+          from: startPos,
+          to: startPos + functionName.length,
+          severity: 'error',
+          message: `Function '${functionName}' accepts at most ${totalParams} parameter(s), but got ${paramCount}`,
+        })
+      }
+    }
+
+    return diagnostics
+  })
+}
+
+/**
  * Create hover tooltip extension that shows documentation on hover
  */
 function createHoverTooltips(def: ScriptLanguageDefinition): Extension {
@@ -400,9 +490,10 @@ const defaultHighlightStyle = HighlightStyle.define([
  * - Syntax highlighting for keywords, functions, variables, etc.
  * - Smart autocompletion with snippet support (parameter placeholders)
  * - Hover tooltips showing function signatures and documentation
+ * - Real-time linting for unknown functions and invalid parameter counts
  *
  * @param def - The language definition to translate
- * @returns Array of CodeMirror extensions (language support + autocompletion + hover tooltips + highlighting)
+ * @returns Array of CodeMirror extensions (language support + autocompletion + hover tooltips + linting + highlighting)
  */
 export function createLanguageExtension(def: ScriptLanguageDefinition): Extension[] {
   const lang = createStreamLanguage(def)
@@ -412,6 +503,7 @@ export function createLanguageExtension(def: ScriptLanguageDefinition): Extensio
     langSupport,
     createAutocompletion(def),
     createHoverTooltips(def),
+    createScriptLinter(def),
     syntaxHighlighting(defaultHighlightStyle),
   ]
 }
