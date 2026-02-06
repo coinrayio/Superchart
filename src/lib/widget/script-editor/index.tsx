@@ -116,7 +116,14 @@ export function ScriptEditor({
           import('@codemirror/theme-one-dark'),
         ])
 
-        if (cancelled || !editorContainerRef.current) return
+        if (cancelled) {
+          return
+        }
+
+        if (!editorContainerRef.current) {
+          setCmAvailable(false)
+          return
+        }
 
         // Build extensions
         const extensions: unknown[] = [
@@ -170,7 +177,7 @@ export function ScriptEditor({
 
         editorViewRef.current = view
         setCmAvailable(true)
-      } catch {
+      } catch (error) {
         // CodeMirror not available — use textarea fallback
         if (!cancelled) {
           setCmAvailable(false)
@@ -178,9 +185,13 @@ export function ScriptEditor({
       }
     }
 
-    loadCodeMirror()
+    // Use a small delay to ensure the ref is attached
+    const timeoutId = setTimeout(() => {
+      loadCodeMirror()
+    }, 0)
 
     return () => {
+      clearTimeout(timeoutId)
       cancelled = true
       if (editorViewRef.current) {
         (editorViewRef.current as { destroy(): void }).destroy()
@@ -327,15 +338,17 @@ export function ScriptEditor({
         <div className="superchart-se-body">
           {/* Editor area */}
           <div className="superchart-se-editor">
+            {/* Always render the CodeMirror container so ref is available */}
+            <div
+              ref={editorContainerRef}
+              className="superchart-se-cm-container"
+              style={{ display: cmAvailable === true ? 'block' : 'none' }}
+            />
+
             {cmAvailable === null && (
               <div className="superchart-se-loading">Loading editor...</div>
             )}
-            {cmAvailable === true && (
-              <div
-                ref={editorContainerRef}
-                className="superchart-se-cm-container"
-              />
-            )}
+
             {cmAvailable === false && (
               <div className="superchart-se-textarea-wrapper">
                 <div className="superchart-se-line-numbers">
