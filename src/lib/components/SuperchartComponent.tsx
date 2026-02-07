@@ -418,31 +418,33 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
           </div>
         </div>
 
-        {/* Script editor panel at bottom */}
-        {scriptEditorVisible && scriptProvider && (
-          <ScriptEditor
-            locale={locale}
-            initialHeight={300}
-            minHeight={150}
-            maxHeight={600}
-            onMinimize={() => setScriptEditorVisible(false)}
-            onAddToChart={async (code) => {
-              try {
-                // Compile the script
-                const result = await scriptProvider.compile(code, 'pine')
-
-                if (result.success && result.metadata?.name) {
-                  // Add the indicator to the chart
-                  createIndicator(result.metadata.name)
-                  setScriptEditorVisible(false)
-                }
-              } catch (error) {
-                console.error('Script compilation failed:', error)
-              }
-            }}
-          />
-        )}
       </div>
+
+      {/* Script editor modal (overlays from right) */}
+      {scriptEditorVisible && scriptProvider && (
+        <ScriptEditor
+          locale={locale}
+          onClose={() => setScriptEditorVisible(false)}
+          onAddToChart={async (code) => {
+            try {
+              // Compile the script
+              const result = await scriptProvider.compile(code, 'pine')
+
+              if (result.success && result.metadata?.name) {
+                // Add the indicator to the chart
+                createIndicator(result.metadata.name)
+                setScriptEditorVisible(false)
+              }
+            } catch (error) {
+              console.error('Script compilation failed:', error)
+            }
+          }}
+          onSave={async (code, name) => {
+            // Save script logic here
+            console.log('Saving script:', name, code)
+          }}
+        />
+      )}
 
       {/* Modals */}
       {indicatorModalVisible && (
