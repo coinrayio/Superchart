@@ -77,12 +77,16 @@ export function ScriptEditor({
   const [diagnostics, setDiagnostics] = useState<ScriptDiagnostic[]>(externalDiagnostics ?? [])
   const [cmAvailable, setCmAvailable] = useState<boolean | null>(null) // null = loading
   const [showScriptMenu, setShowScriptMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
+  const [showHelpSubmenu, setShowHelpSubmenu] = useState(false)
+  const [profilerMode, setProfilerMode] = useState(false)
   const [isAnchored, setIsAnchored] = useState(true)
 
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const editorViewRef = useRef<unknown>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scriptMenuRef = useRef<HTMLDivElement>(null)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
 
   // Update diagnostics when external diagnostics change
   useEffect(() => {
@@ -227,19 +231,23 @@ export function ScriptEditor({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleSave, handleAddToChart, onClose])
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (scriptMenuRef.current && !scriptMenuRef.current.contains(e.target as Node)) {
         setShowScriptMenu(false)
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false)
+        setShowHelpSubmenu(false)
+      }
     }
 
-    if (showScriptMenu) {
+    if (showScriptMenu || showMoreMenu) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showScriptMenu])
+  }, [showScriptMenu, showMoreMenu])
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newCode = e.target.value
@@ -370,13 +378,102 @@ export function ScriptEditor({
             </select>
 
             {/* More options button */}
-            <button className="superchart-se-icon-btn" title="More options">
-              <svg width="20" height="20" viewBox="0 0 20 20">
-                <circle cx="10" cy="4" r="1.5" fill="currentColor"/>
-                <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
-                <circle cx="10" cy="16" r="1.5" fill="currentColor"/>
-              </svg>
-            </button>
+            <div className="superchart-se-more-dropdown" ref={moreMenuRef}>
+              <button
+                className="superchart-se-icon-btn"
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                title="More options"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                  <circle cx="10" cy="4" r="1.5" fill="currentColor"/>
+                  <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="10" cy="16" r="1.5" fill="currentColor"/>
+                </svg>
+              </button>
+
+              {showMoreMenu && (
+                <div className="superchart-se-dropdown-menu superchart-se-dropdown-right">
+                  <button className="superchart-se-menu-item">
+                    <span>{i18n('editor_settings', locale) || 'Editor settings'}</span>
+                  </button>
+
+                  <div className="superchart-se-menu-separator" />
+
+                  <div className="superchart-se-menu-section-title">
+                    {i18n('open_editor', locale) || 'OPEN EDITOR'}
+                  </div>
+                  <button className="superchart-se-menu-item">
+                    <span>{i18n('new_tab', locale) || 'New tab'}</span>
+                  </button>
+                  <button className="superchart-se-menu-item">
+                    <span>{i18n('new_window', locale) || 'New window'}</span>
+                  </button>
+
+                  <div className="superchart-se-menu-separator" />
+
+                  <div className="superchart-se-menu-section-title">
+                    {i18n('developer_tools', locale) || 'DEVELOPER TOOLS'}
+                  </div>
+                  <button
+                    className="superchart-se-menu-item superchart-se-menu-switch"
+                    onClick={() => setProfilerMode(!profilerMode)}
+                  >
+                    <span>{i18n('profiler_mode', locale) || 'Profiler mode'}</span>
+                    <div className={`superchart-se-switch ${profilerMode ? 'active' : ''}`}>
+                      <div className="superchart-se-switch-thumb" />
+                    </div>
+                  </button>
+                  <button className="superchart-se-menu-item">
+                    <span>{(language ?? defaultScriptLanguage).name} {i18n('logs', locale) || 'logs'}</span>
+                  </button>
+
+                  <div className="superchart-se-menu-separator" />
+
+                  <button className="superchart-se-menu-item">
+                    <span>{i18n('release_notes', locale) || 'Release notes'}</span>
+                  </button>
+
+                  {/* Help menu with submenu */}
+                  <div
+                    className="superchart-se-menu-item superchart-se-menu-submenu"
+                    onMouseEnter={() => setShowHelpSubmenu(true)}
+                    onMouseLeave={() => setShowHelpSubmenu(false)}
+                  >
+                    <span>{i18n('help', locale) || 'Help'}</span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" style={{ marginLeft: 'auto' }}>
+                      <path d="M5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                    </svg>
+
+                    {/* Help submenu */}
+                    {showHelpSubmenu && (
+                      <div className="superchart-se-submenu-content">
+                        <div className="superchart-se-menu-section-title">
+                          {i18n('editor_references', locale) || 'EDITOR REFERENCES'}
+                        </div>
+                        <button className="superchart-se-menu-item">
+                          <span>{i18n('how_to_use', locale) || 'How to use'}</span>
+                        </button>
+                        <button className="superchart-se-menu-item">
+                          <span>{i18n('keyboard_shortcuts', locale) || 'Keyboard shortcuts'}</span>
+                        </button>
+
+                        <div className="superchart-se-menu-separator" />
+
+                        <div className="superchart-se-menu-section-title">
+                          {(language ?? defaultScriptLanguage).name.toUpperCase()} {i18n('references', locale) || 'REFERENCES'}
+                        </div>
+                        <button className="superchart-se-menu-item">
+                          <span>{i18n('user_manual', locale) || 'User manual'}</span>
+                        </button>
+                        <button className="superchart-se-menu-item">
+                          <span>{i18n('reference_manual', locale) || 'Reference manual...'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

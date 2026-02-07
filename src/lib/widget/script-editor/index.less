@@ -186,6 +186,90 @@
   letter-spacing: 0.5px;
 }
 
+/* Right-aligned dropdown */
+.superchart-se-dropdown-right {
+  left: auto;
+  right: 0;
+}
+
+/* More dropdown wrapper */
+.superchart-se-more-dropdown {
+  position: relative;
+}
+
+/* Menu item with switch */
+.superchart-se-menu-switch {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Switch toggle */
+.superchart-se-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--klinecharts-separator-color, #2a2e39);
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+
+  &.active {
+    background: var(--klinecharts-primary-color, #2962ff);
+
+    .superchart-se-switch-thumb {
+      transform: translateX(16px);
+    }
+  }
+}
+
+.superchart-se-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+/* Submenu container */
+.superchart-se-menu-submenu {
+  position: relative;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--klinecharts-background-color, #2a2e39);
+  }
+}
+
+/* Submenu content */
+.superchart-se-submenu-content {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 4px;
+  min-width: 220px;
+  background: var(--klinecharts-background-color, #1e222d);
+  border: 1px solid var(--klinecharts-separator-color, #2a2e39);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 6px 0;
+  z-index: 1002;
+  animation: slideIn 0.2s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Save button */
 .superchart-se-save-btn {
   display: flex;
