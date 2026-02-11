@@ -38,13 +38,244 @@ export interface ScriptEditorProps {
   onNameChange?: (name: string) => void
 }
 
-const DEFAULT_CODE = `// Start typing your script here
-indicator("My Indicator", overlay=true)
+const DEFAULT_CODE = `//@version=6
+indicator(title="Stochastic", shorttitle="Stoch", format=format.price, precision=2, timeframe="", timeframe_gaps=true)
+periodK = input.int(14, title="%K Length", minval=1)
+smoothK = input.int(1, title="%K Smoothing", minval=1)
+periodD = input.int(3, title="%D Smoothing", minval=1)
+k = ta.sma(ta.stoch(close, high, low, periodK), smoothK)
+d = ta.sma(k, periodD)
+plot(k, title="%K", color=#2962FF)
+plot(d, title="%D", color=#FF6D00)
+h0 = hline(80, "Upper Band", color=#787B86)
+hline(50, "Middle Band", color=color.new(#787B86, 50))
+h1 = hline(20, "Lower Band", color=#787B86)
+fill(h0, h1, color=color.rgb(33, 150, 243, 90), title="Background")
+`
 
-input length = 14
+const DEFAULT_CODE_TWO = `//@version=4
+// Credits to LazyBear and JustUncleL.. more features added by ZyadaCharts
 
-value = sma(close, length)
-plot(value, "SMA", color=color.blue)
+
+study("TDI - Traders Dynamic Index + RSI Divergences + Buy/Sell Signals", shorttitle="TDI + RSI Div")
+
+rsiPeriod = input(14, minval = 1, title = "RSI Period")
+bandLength = input(34, minval = 1, title = "Band Length")
+lengthrsipl = input(7, minval = 0, title = "Fast MA on RSI")
+lengthtradesl = input(2, minval = 1, title = "Slow MA on RSI")
+
+src1 = close                                                             // Source of Calculations (Close of Bar)
+r = rsi(src1, rsiPeriod)                                                 // RSI of Close
+ma = sma(r, bandLength)                                                 // Moving Average of RSI [current]
+offs = (1.6185 * stdev(r, bandLength))                                  // Offset
+up = ma + offs                                                          // Upper Bands
+dn = ma - offs                                                          // Lower Bands
+mid = (up + dn) / 2                                                     // Average of Upper and Lower Bands
+mbb = sma(r, lengthrsipl)                                            // Moving Average of RSI 2 bars back
+mab = sma(r, lengthtradesl)                                          // Moving Average of RSI 7 bars back
+
+
+hline(30, color=color.red, linewidth=1, linestyle=hline.style_dotted)
+hline(50, color=color.orange, linewidth=1, linestyle=hline.style_dotted)
+hline(70, color=color.green, linewidth=1, linestyle=hline.style_dotted)
+
+// Plot the TDI
+upl=plot(up, color=#12bcc9, transp=60, title="VB Channel High",linewidth=2)
+dnl=plot(dn, color=#12bcc9, transp=60, title="VB Channel Low",linewidth=2)
+midl=plot(mid, color=color.orange, transp=40, linewidth=2, title="MBL")
+mabl=plot(mab, color=color.lime, transp=30, linewidth=2, title="RSI PL")
+mbbl=plot(mbb, color=color.red, transp=60, linewidth=2, title="TSL Signal")
+
+//
+//create RSI TSL cloud to indicate trend direction.
+fill(mabl,mbbl, color=mab>mbb?color.green:color.red,transp=80)
+// fill(upl, midl, color.green, transp=95)                                   
+// fill(midl, dnl, color.red, transp=95)        
+
+
+//long/short labels
+
+long1= crossover(mab, mbb) and mbb > mid and mbb > 50
+short1= crossunder(mab, mbb) and mbb < mid and mbb < 50
+
+plotshape(long1, style=shape.labelup, location=location.bottom, color=color.lime, size=size.tiny, editable=true)
+plotshape(short1, style=shape.labeldown, location=location.top, color=color.red, size=size.tiny, editable=true)
+
+alertcondition(long1, title='Long', message='Crossover')
+alertcondition(short1, title='Short', message='Crossunder')
+
+best_setup = crossover(mab, mid) 
+alertcondition(best_setup, title="RSI Crosses Yellow", message="rsi crosses mid")
+
+scalp= mab > mid 
+bgcolor(scalp ? color.lime : na, transp=95)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+// Divergences //
+
+
+len = input(title="RSI Period", minval=1, defval=14)
+src = input(title="RSI Source", defval=close)
+lbR = input(title="Pivot Lookback Right", defval=5)
+lbL = input(title="Pivot Lookback Left", defval=5)
+rangeUpper = input(title="Max of Lookback Range", defval=60)
+rangeLower = input(title="Min of Lookback Range", defval=5)
+plotBull = input(title="Plot Bullish", defval=true)
+plotHiddenBull = input(title="Plot Hidden Bullish", defval=false)
+plotBear = input(title="Plot Bearish", defval=true)
+plotHiddenBear = input(title="Plot Hidden Bearish", defval=false)
+bearColor = color.red
+bullColor = color.green
+hiddenBullColor = color.new(color.green, 80)
+hiddenBearColor = color.new(color.red, 80)
+textColor = color.white
+noneColor = color.new(color.white, 100)
+osc = rsi(src, len)
+
+// // plot(osc, title="RSI", linewidth=2, color=#8D1699)
+// hline(50, title="Middle Line", linewidth=2, linestyle=hline.style_dotted)
+// obLevel = hline(70, title="Overbought", linewidth=2, linestyle=hline.style_dotted)
+// osLevel = hline(30, title="Oversold", linewidth=2, linestyle=hline.style_dotted)
+
+plFound = na(pivotlow(osc, lbL, lbR)) ? false : true
+phFound = na(pivothigh(osc, lbL, lbR)) ? false : true
+_inRange(cond) =>
+	bars = barssince(cond == true)
+	rangeLower <= bars and bars <= rangeUpper
+
+
+//------------------------------------------------------------------------------
+// Regular Bullish
+// Osc: Higher Low
+
+oscHL = osc[lbR] > valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+
+// Price: Lower Low
+
+priceLL = low[lbR] < valuewhen(plFound, low[lbR], 1)
+bullCond = plotBull and priceLL and oscHL and plFound
+
+plot(
+     plFound ? osc[lbR] : na,
+     offset=-lbR,
+     title="Regular Bullish",
+     linewidth=2,
+     color=(bullCond ? bullColor : noneColor),
+     transp=0
+     )
+
+plotshape(
+	 bullCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bullish Label",
+	 text=" Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Hidden Bullish
+// Osc: Lower Low
+
+oscLL = osc[lbR] < valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+
+// Price: Higher Low
+
+priceHL = low[lbR] > valuewhen(plFound, low[lbR], 1)
+hiddenBullCond = plotHiddenBull and priceHL and oscLL and plFound
+
+plot(
+	 plFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bullish",
+	 linewidth=2,
+	 color=(hiddenBullCond ? hiddenBullColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 hiddenBullCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bullish Label",
+	 text=" H Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+// Osc: Lower High
+
+oscLH = osc[lbR] < valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+
+// Price: Higher High
+
+priceHH = high[lbR] > valuewhen(phFound, high[lbR], 1)
+
+bearCond = plotBear and priceHH and oscLH and phFound
+
+plot(
+	 phFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bearish",
+	 linewidth=2,
+	 color=(bearCond ? bearColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 bearCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Regular Bearish Label",
+	 text=" Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
+
+//------------------------------------------------------------------------------
+// Hidden Bearish
+// Osc: Higher High
+
+oscHH = osc[lbR] > valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+
+// Price: Lower High
+
+priceLH = high[lbR] < valuewhen(phFound, high[lbR], 1)
+
+hiddenBearCond = plotHiddenBear and priceLH and oscHH and phFound
+
+plot(
+	 phFound ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bearish",
+	 linewidth=2,
+	 color=(hiddenBearCond ? hiddenBearColor : noneColor),
+	 transp=0
+	 )
+
+plotshape(
+	 hiddenBearCond ? osc[lbR] : na,
+	 offset=-lbR,
+	 title="Hidden Bearish Label",
+	 text=" H Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 transp=0
+	 )
 `
 
 // Hook to subscribe to store values
@@ -79,6 +310,7 @@ export function ScriptEditor({
   const [showScriptMenu, setShowScriptMenu] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showHelpSubmenu, setShowHelpSubmenu] = useState(false)
+  const [submenuPosition, setSubmenuPosition] = useState<'left' | 'right'>('right')
   const [profilerMode, setProfilerMode] = useState(false)
   const [isAnchored, setIsAnchored] = useState(true)
 
@@ -87,6 +319,7 @@ export function ScriptEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scriptMenuRef = useRef<HTMLDivElement>(null)
   const moreMenuRef = useRef<HTMLDivElement>(null)
+  const helpMenuRef = useRef<HTMLDivElement>(null)
 
   // Update diagnostics when external diagnostics change
   useEffect(() => {
@@ -106,13 +339,11 @@ export function ScriptEditor({
           { EditorState },
           { defaultKeymap, history, historyKeymap },
           { searchKeymap, highlightSelectionMatches },
-          { oneDark },
         ] = await Promise.all([
           import('@codemirror/view'),
           import('@codemirror/state'),
           import('@codemirror/commands'),
           import('@codemirror/search'),
-          import('@codemirror/theme-one-dark'),
         ])
 
         if (cancelled) {
@@ -140,24 +371,124 @@ export function ScriptEditor({
             }
           }),
           EditorView.theme({
-            '&': { height: '100%', fontSize: `${fontSize}px` },
-            '.cm-scroller': { overflow: 'auto', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace' },
-            '.cm-content': { minHeight: '200px' },
+            '&': {
+              height: '100%',
+              fontSize: `${fontSize}px`,
+              backgroundColor: theme === 'dark' ? '#1e222d' : '#ffffff',
+            },
+            '.cm-scroller': {
+              overflow: 'auto',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace',
+            },
+            '.cm-content': {
+              minHeight: '200px',
+              caretColor: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            '.cm-line': {
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            '.cm-gutters': {
+              backgroundColor: theme === 'dark' ? '#131722' : '#f5f5f5',
+              color: theme === 'dark' ? '#787b86' : '#999',
+              border: 'none',
+            },
+            '.cm-activeLineGutter': {
+              backgroundColor: theme === 'dark' ? '#2a2e39' : '#e8e8e8',
+            },
+            '.cm-activeLine': {
+              backgroundColor: theme === 'dark' ? 'rgba(42, 46, 57, 0.3)' : 'rgba(0, 0, 0, 0.05)',
+            },
+            '.cm-selectionBackground, ::selection': {
+              backgroundColor: theme === 'dark' ? '#264f78' : '#b3d7ff',
+            },
+            '&.cm-focused .cm-selectionBackground, &.cm-focused ::selection': {
+              backgroundColor: theme === 'dark' ? '#264f78' : '#b3d7ff',
+            },
+            '.cm-cursor': {
+              borderLeftColor: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            // Autocomplete tooltip styling
+            '.cm-tooltip-autocomplete': {
+              backgroundColor: theme === 'dark' ? '#1e222d' : '#ffffff',
+              border: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace',
+            },
+            '.cm-tooltip-autocomplete ul': {
+              margin: '0',
+              padding: '4px 0',
+              listStyle: 'none',
+            },
+            '.cm-tooltip-autocomplete ul li': {
+              padding: '4px 8px',
+              cursor: 'pointer',
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            '.cm-tooltip-autocomplete ul li[aria-selected]': {
+              backgroundColor: theme === 'dark' ? '#2a2e39' : '#e8e8e8',
+              color: theme === 'dark' ? '#ffffff' : '#000000',
+            },
+            '.cm-completionLabel': {
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            '.cm-completionDetail': {
+              color: theme === 'dark' ? '#787b86' : '#999',
+              fontStyle: 'italic',
+              marginLeft: '8px',
+            },
+            '.cm-completionInfo': {
+              backgroundColor: theme === 'dark' ? '#131722' : '#f5f5f5',
+              border: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              borderRadius: '4px',
+              padding: '8px',
+              maxWidth: '400px',
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            // Tooltip styling
+            '.cm-tooltip': {
+              backgroundColor: theme === 'dark' ? '#1e222d' : '#ffffff',
+              border: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              borderRadius: '4px',
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            // Search panel styling
+            '.cm-panel': {
+              backgroundColor: theme === 'dark' ? '#131722' : '#f5f5f5',
+              borderTop: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+            },
+            '.cm-panel input': {
+              backgroundColor: theme === 'dark' ? '#1e222d' : '#ffffff',
+              border: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              borderRadius: '4px',
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+              padding: '4px 8px',
+            },
+            '.cm-panel button': {
+              backgroundColor: theme === 'dark' ? '#2a2e39' : '#e8e8e8',
+              border: `1px solid ${theme === 'dark' ? '#2a2e39' : '#ddd'}`,
+              borderRadius: '4px',
+              color: theme === 'dark' ? '#d1d4dc' : '#3b3b3b',
+              padding: '4px 8px',
+              cursor: 'pointer',
+            },
+            '.cm-panel button:hover': {
+              backgroundColor: theme === 'dark' ? '#363a45' : '#d8d8d8',
+            },
           }),
         ]
 
-        // Apply dark theme
-        if (theme === 'dark') {
-          extensions.push(oneDark)
-        }
-
-        // Add language extensions
+        // Add language extensions (DO NOT add oneDark to avoid color conflicts)
         if (editorExtensions) {
           extensions.push(...editorExtensions)
         } else {
           try {
             const { createLanguageExtension } = await import('./languageAdapter')
-            const langExts = createLanguageExtension(language ?? defaultScriptLanguage)
+            const langExts = createLanguageExtension(
+              language ?? defaultScriptLanguage,
+              theme === 'light' ? 'light' : 'dark'
+            )
             extensions.push(...langExts)
           } catch (error) {
             console.info('[ScriptEditor] Language adapter import failed — continue without syntax highlighting', error)
@@ -254,6 +585,21 @@ export function ScriptEditor({
     setCode(newCode)
     onChange?.(newCode)
   }, [onChange])
+
+  // Calculate submenu position based on available space
+  const handleHelpMouseEnter = useCallback(() => {
+    if (helpMenuRef.current) {
+      const rect = helpMenuRef.current.getBoundingClientRect()
+      const submenuWidth = 220 // min-width from CSS
+      const spaceOnRight = window.innerWidth - rect.right
+      setSubmenuPosition(spaceOnRight < submenuWidth ? 'left' : 'right')
+    }
+    setShowHelpSubmenu(true)
+  }, [])
+
+  const handleHelpMouseLeave = useCallback(() => {
+    setShowHelpSubmenu(false)
+  }, [])
 
   const lineCount = code.split('\n').length
   const errors = diagnostics.filter(d => d.severity === 'error')
@@ -435,9 +781,10 @@ export function ScriptEditor({
 
                   {/* Help menu with submenu */}
                   <div
+                    ref={helpMenuRef}
                     className="superchart-se-menu-item superchart-se-menu-submenu"
-                    onMouseEnter={() => setShowHelpSubmenu(true)}
-                    onMouseLeave={() => setShowHelpSubmenu(false)}
+                    onMouseEnter={handleHelpMouseEnter}
+                    onMouseLeave={handleHelpMouseLeave}
                   >
                     <span>{i18n('help', locale) || 'Help'}</span>
                     <svg width="12" height="12" viewBox="0 0 12 12" style={{ marginLeft: 'auto' }}>
@@ -446,7 +793,7 @@ export function ScriptEditor({
 
                     {/* Help submenu */}
                     {showHelpSubmenu && (
-                      <div className="superchart-se-submenu-content">
+                      <div className={`superchart-se-submenu-content ${submenuPosition === 'left' ? 'position-left' : ''}`}>
                         <div className="superchart-se-menu-section-title">
                           {i18n('editor_references', locale) || 'EDITOR REFERENCES'}
                         </div>

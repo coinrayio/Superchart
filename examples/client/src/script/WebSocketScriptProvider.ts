@@ -27,6 +27,8 @@ export class WebSocketScriptProvider implements ScriptProvider {
     onDataHandler?: IndicatorDataHandler
     onTickHandler?: IndicatorTickHandler
     onErrorHandler?: (error: Error) => void
+    bufferedData: any[]
+    bufferedTicks: any[]
   }>()
 
   constructor(private url: string) {
@@ -105,17 +107,37 @@ export class WebSocketScriptProvider implements ScriptProvider {
 
   private handleIndicatorData(message: any): void {
     const { scriptId, data } = message
+    console.log(`[DEBUG WS] handleIndicatorData: scriptId=${scriptId}, data points=${Array.isArray(data) ? data.length : 'not array'}`)
+    if (Array.isArray(data) && data.length > 0) {
+      const nonEmpty = data.filter((dp: any) => Object.keys(dp.values || {}).length > 0)
+      console.log(`[DEBUG WS] data points with values: ${nonEmpty.length}`)
+      if (nonEmpty.length > 0) {
+        console.log(`[DEBUG WS] sample data point:`, JSON.stringify(nonEmpty[0]))
+      }
+    }
     const subscription = this.activeSubscriptions.get(scriptId)
-    if (subscription?.onDataHandler) {
+    if (!subscription) {
+      console.log(`[DEBUG WS] no subscription found for scriptId=${scriptId}`)
+      return
+    }
+    if (subscription.onDataHandler) {
+      console.log(`[DEBUG WS] calling onDataHandler directly`)
       subscription.onDataHandler(data)
+    } else {
+      // Buffer data until handler is registered (fixes race condition)
+      console.log(`[DEBUG WS] buffering data (handler not yet registered)`)
+      subscription.bufferedData.push(data)
     }
   }
 
   private handleIndicatorTick(message: any): void {
     const { scriptId, data } = message
     const subscription = this.activeSubscriptions.get(scriptId)
-    if (subscription?.onTickHandler) {
+    if (!subscription) return
+    if (subscription.onTickHandler) {
       subscription.onTickHandler(data)
+    } else {
+      subscription.bufferedTicks.push(data)
     }
   }
 
@@ -176,12 +198,17 @@ export class WebSocketScriptProvider implements ScriptProvider {
 
     const scriptId = response.scriptId
 
-    // Initialize subscription handlers storage
+    // Initialize subscription handlers storage with buffers for race condition
     const subscriptionHandlers: {
       onDataHandler?: IndicatorDataHandler
       onTickHandler?: IndicatorTickHandler
       onErrorHandler?: (error: Error) => void
-    } = {}
+      bufferedData: any[]
+      bufferedTicks: any[]
+    } = {
+      bufferedData: [],
+      bufferedTicks: [],
+    }
 
     this.activeSubscriptions.set(scriptId, subscriptionHandlers)
 
@@ -190,14 +217,25 @@ export class WebSocketScriptProvider implements ScriptProvider {
       indicatorId: scriptId,
       metadata: response.metadata,
 
-      // onData accepts a handler function and stores it
+      // onData accepts a handler function and replays any buffered data
       onData(handler: IndicatorDataHandler) {
         subscriptionHandlers.onDataHandler = handler
+        console.log(`[DEBUG WS] onData handler registered, buffered items: ${subscriptionHandlers.bufferedData.length}`)
+        // Replay any data that arrived before handler was registered
+        for (const data of subscriptionHandlers.bufferedData) {
+          console.log(`[DEBUG WS] replaying buffered data, isArray=${Array.isArray(data)}, length=${Array.isArray(data) ? data.length : 'N/A'}`)
+          handler(data)
+        }
+        subscriptionHandlers.bufferedData = []
       },
 
-      // onTick accepts a handler function and stores it
+      // onTick accepts a handler function and replays any buffered ticks
       onTick(handler: IndicatorTickHandler) {
         subscriptionHandlers.onTickHandler = handler
+        for (const data of subscriptionHandlers.bufferedTicks) {
+          handler(data)
+        }
+        subscriptionHandlers.bufferedTicks = []
       },
 
       // onError is optional

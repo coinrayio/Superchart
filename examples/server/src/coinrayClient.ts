@@ -45,7 +45,9 @@ export class CoinrayClient {
    * Convert superchart period to Coinray resolution format
    */
   private periodToResolution(period: Period): string {
-    const { multiplier, timespan } = period
+    // Support both klinecharts format (type/span) and legacy format (timespan/multiplier)
+    const timespan = period.timespan ?? period.type
+    const multiplier = period.multiplier ?? period.span ?? 1
 
     switch (timespan) {
       case 'second':

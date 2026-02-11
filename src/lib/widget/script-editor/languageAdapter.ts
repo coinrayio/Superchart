@@ -24,8 +24,15 @@ import type { ScriptLanguageDefinition, ScriptBuiltinFunction, ScriptBuiltinVari
 function createStreamLanguage(def: ScriptLanguageDefinition) {
   const keywordSet = new Set(def.keywords)
   const typeKeywordSet = new Set(def.typeKeywords ?? [])
-  const builtinFunctionSet = new Set(def.builtinFunctions.map(f => f.name))
   const builtinVariableSet = new Set((def.builtinVariables ?? []).map(v => v.name))
+
+  // Separate namespaces from actual builtin variables
+  const namespaceSet = new Set(
+    (def.builtinVariables ?? [])
+      .filter(v => v.type === 'namespace')
+      .map(v => v.name)
+  )
+
   const operatorChars = new Set((def.operators ?? []).join('').split(''))
   const stringDelims = new Set(def.stringDelimiters ?? ['"', "'"])
 
@@ -102,21 +109,60 @@ function createStreamLanguage(def: ScriptLanguageDefinition) {
       }
 
       // Identifiers and keywords
-      if (stream.match(/^[a-zA-Z_]\w*(?:\.\w+)*/)) {
-        const word = stream.current()
+      // Match entire dotted names as single tokens: input.int, ta.sma, color.rgb, etc.
+      if (stream.match(/^[a-zA-Z_]\w*/)) {
+        let word = stream.current()
 
-        // Check dotted names (e.g., syminfo.ticker, strategy.entry)
-        if (builtinVariableSet.has(word)) return 'variableName.special'
-        if (builtinFunctionSet.has(word)) return 'function'
-        if (keywordSet.has(word)) return 'keyword'
-        if (typeKeywordSet.has(word)) return 'typeName'
-
-        // Check base name for dotted identifiers
-        const baseName = word.split('.')[0]
-        if (builtinVariableSet.has(baseName) || builtinFunctionSet.has(baseName)) {
-          return 'variableName.special'
+        // Continue matching dot-separated parts
+        while (stream.peek() === '.' && !stream.match(/^\.\s*\(/, false)) {
+          stream.next() // consume the dot
+          if (stream.match(/^[a-zA-Z_]\w*/)) {
+            word = word + '.' + stream.current()
+          } else {
+            break
+          }
         }
 
+        // NOW check what comes after the complete identifier
+        const nextChar = stream.peek()
+
+        // Function call detection (followed by '(' with optional whitespace)
+        if (nextChar === '(' || stream.match(/^\s*\(/, false)) {
+          return 'function'
+        }
+
+        // Check keywords and types (only for simple identifiers without dots)
+        if (!word.includes('.')) {
+          if (keywordSet.has(word)) return 'keyword'
+          if (typeKeywordSet.has(word)) return 'typeName'
+        }
+
+        // For dotted names (e.g., color.new, ta.sma, input.int)
+        if (word.includes('.')) {
+          // Check if the complete dotted name is a builtin constant
+          if (builtinVariableSet.has(word)) {
+            return 'variableName.special'
+          }
+
+          // Check if base is a namespace
+          const baseName = word.split('.')[0]
+          if (namespaceSet.has(baseName)) {
+            // Namespace reference like color.red, format.price
+            return 'variableName.special'
+          }
+        }
+
+        // For simple identifiers (no dots)
+        if (!word.includes('.')) {
+          // Check if it's a builtin variable/constant (but NOT a namespace when used alone)
+          // Namespaces like 'color', 'input', 'ta' when used alone (e.g., as parameter names)
+          // should be treated as regular variables
+          if (builtinVariableSet.has(word) && !namespaceSet.has(word)) {
+            return 'variableName.special'
+          }
+        }
+
+        // Regular user-defined variable (including namespace names used as parameter names)
         return 'variableName'
       }
 
@@ -146,6 +192,11 @@ function createStreamLanguage(def: ScriptLanguageDefinition) {
         line: lineComment,
         block: blockStart && blockEnd ? { open: blockStart, close: blockEnd } : undefined,
       },
+    },
+
+    tokenTable: {
+      function: tags.function(tags.variableName),
+      'variableName.special': tags.special(tags.variableName),
     },
   })
 }
@@ -263,9 +314,9 @@ function createScriptLinter(def: ScriptLanguageDefinition): Extension {
     const diagnostics: Diagnostic[] = []
     const text = view.state.doc.toString()
 
-    // Simple function call pattern: functionName(...)
-    // Matches: functionName followed by (
-    const functionCallPattern = /([a-zA-Z_]\w*)\s*\(/g
+    // Function call pattern: matches dotted names like input.int, ta.sma, or simple names like sma
+    // Matches: functionName (with optional dots) followed by (
+    const functionCallPattern = /([a-zA-Z_]\w*(?:\.\w+)*)\s*\(/g
     let match: RegExpExecArray | null
 
     while ((match = functionCallPattern.exec(text)) !== null) {
@@ -466,21 +517,47 @@ function createHoverTooltips(def: ScriptLanguageDefinition): Extension {
 }
 
 /**
- * Default highlight style for script languages
+ * Light theme highlight style for script languages (TradingView Pine Script style)
  */
-const defaultHighlightStyle = HighlightStyle.define([
-  { tag: tags.keyword, color: '#c678dd' },
-  { tag: tags.typeName, color: '#e5c07b' },
-  { tag: tags.function(tags.variableName), color: '#61afef' },
-  { tag: tags.variableName, color: '#e06c75' },
-  { tag: tags.string, color: '#98c379' },
-  { tag: tags.number, color: '#d19a66' },
+const lightHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: '#2962ff' }, // blue for keywords
+  { tag: tags.typeName, color: '#2962ff' }, // blue for types
+  { tag: tags.function(tags.variableName), color: '#2962ff' }, // blue for functions
+  { tag: tags.variableName, color: '#3b3b3b' }, // dark gray for regular variables
+  { tag: tags.special(tags.variableName), color: '#e53935' }, // red for builtin variables
+  { tag: tags.string, color: '#26a69a' }, // green for strings
+  { tag: tags.number, color: '#ff6f00' }, // orange for numbers
   { tag: tags.comment, color: '#7f848e', fontStyle: 'italic' },
   { tag: tags.lineComment, color: '#7f848e', fontStyle: 'italic' },
   { tag: tags.blockComment, color: '#7f848e', fontStyle: 'italic' },
-  { tag: tags.operator, color: '#56b6c2' },
+  { tag: tags.operator, color: '#3b3b3b' }, // dark gray for operators
   { tag: tags.meta, color: '#7f848e' },
-  { tag: tags.punctuation, color: '#abb2bf' },
+  { tag: tags.punctuation, color: '#3b3b3b' }, // dark gray for braces/brackets
+  { tag: tags.paren, color: '#3b3b3b' }, // dark gray for parentheses
+  { tag: tags.brace, color: '#3b3b3b' }, // dark gray for braces
+  { tag: tags.bracket, color: '#3b3b3b' }, // dark gray for brackets
+])
+
+/**
+ * Dark theme highlight style for script languages (TradingView Pine Script style)
+ */
+const darkHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: '#2962ff' }, // blue for keywords
+  { tag: tags.typeName, color: '#2962ff' }, // blue for types
+  { tag: tags.function(tags.variableName), color: '#2962ff' }, // blue for functions
+  { tag: tags.variableName, color: '#d1d4dc' }, // light gray for regular variables
+  { tag: tags.special(tags.variableName), color: '#e53935' }, // red for builtin variables
+  { tag: tags.string, color: '#26a69a' }, // green for strings
+  { tag: tags.number, color: '#ff6f00' }, // orange for numbers
+  { tag: tags.comment, color: '#7f848e', fontStyle: 'italic' },
+  { tag: tags.lineComment, color: '#7f848e', fontStyle: 'italic' },
+  { tag: tags.blockComment, color: '#7f848e', fontStyle: 'italic' },
+  { tag: tags.operator, color: '#d1d4dc' }, // light gray for operators
+  { tag: tags.meta, color: '#7f848e' },
+  { tag: tags.punctuation, color: '#d1d4dc' }, // light gray for braces/brackets
+  { tag: tags.paren, color: '#d1d4dc' }, // light gray for parentheses
+  { tag: tags.brace, color: '#d1d4dc' }, // light gray for braces
+  { tag: tags.bracket, color: '#d1d4dc' }, // light gray for brackets
 ])
 
 /**
@@ -493,18 +570,20 @@ const defaultHighlightStyle = HighlightStyle.define([
  * - Real-time linting for unknown functions and invalid parameter counts
  *
  * @param def - The language definition to translate
+ * @param theme - Theme to use for syntax highlighting ('light' or 'dark', defaults to 'dark')
  * @returns Array of CodeMirror extensions (language support + autocompletion + hover tooltips + linting + highlighting)
  */
-export function createLanguageExtension(def: ScriptLanguageDefinition): Extension[] {
+export function createLanguageExtension(def: ScriptLanguageDefinition, theme: 'light' | 'dark' = 'dark'): Extension[] {
   const lang = createStreamLanguage(def)
   const langSupport = new LanguageSupport(lang)
+  const highlightStyle = theme === 'light' ? lightHighlightStyle : darkHighlightStyle
 
   return [
     langSupport,
     createAutocompletion(def),
     createHoverTooltips(def),
     createScriptLinter(def),
-    syntaxHighlighting(defaultHighlightStyle),
+    syntaxHighlighting(highlightStyle),
   ]
 }
 

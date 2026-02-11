@@ -427,16 +427,114 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
           onClose={() => setScriptEditorVisible(false)}
           onAddToChart={async (code) => {
             try {
-              // Compile the script
-              const result = await scriptProvider.compile(code, 'pine')
+              const symbolInfo = store.symbol()
+              const periodInfo = store.period()
+              const chart = store.instanceApi()
 
-              if (result.success && result.metadata?.name) {
-                // Add the indicator to the chart
-                createIndicator(result.metadata.name)
-                setScriptEditorVisible(false)
+              if (!symbolInfo || !periodInfo || !chart) {
+                console.error('Chart not ready')
+                return
               }
+
+              // Execute the script as an indicator
+              const subscription = await scriptProvider.executeAsIndicator({
+                code,
+                language: 'pine',
+                symbol: symbolInfo,
+                period: periodInfo,
+              })
+
+              // Create data store for this script
+              const dataStore = new Map<number, any>()
+
+              // Generate unique template name
+              const templateName = `SCRIPT_${subscription.indicatorId}`
+
+              // Register indicator with klinecharts (following useBackendIndicators pattern)
+              const { registerIndicator } = await import('klinecharts')
+
+              // Build figures from metadata plots
+              console.log(`[DEBUG chart] metadata.plots:`, JSON.stringify(subscription.metadata.plots))
+              const figures = subscription.metadata.plots
+                .filter((plot) => plot.type === 'plot' || plot.type === 'histogram')
+                .map((plot: any) => ({
+                  key: plot.id,
+                  title: `${plot.title}: `,
+                  type: plot.type === 'histogram' ? 'bar' : 'line',
+                }))
+              console.log(`[DEBUG chart] figures:`, JSON.stringify(figures))
+
+              let calcLogged = false
+              registerIndicator({
+                name: templateName,
+                shortName: subscription.metadata.shortName,
+                precision: subscription.metadata.precision,
+                figures,
+                calc: (dataList: any[]) => {
+                  const result = dataList.map((kline) => {
+                    const point = dataStore.get(kline.timestamp)
+                    if (!point) {
+                      return figures.reduce((acc, fig) => ({ ...acc, [fig.key]: null }), {})
+                    }
+                    return point.values
+                  })
+                  // DEBUG: Log first call only
+                  if (!calcLogged) {
+                    calcLogged = true
+                    const nonNull = result.filter((r) => figures.some((f) => r[f.key] !== null && r[f.key] !== undefined))
+                    console.log(`[DEBUG chart] calc called: dataList=${dataList.length}, dataStore=${dataStore.size}, results with values=${nonNull.length}`)
+                    if (nonNull.length > 0) {
+                      console.log(`[DEBUG chart] sample calc result:`, JSON.stringify(nonNull[0]))
+                    }
+                    if (dataList.length > 0) {
+                      console.log(`[DEBUG chart] sample kline timestamp:`, dataList[0].timestamp)
+                      console.log(`[DEBUG chart] dataStore has this timestamp:`, dataStore.has(dataList[0].timestamp))
+                    }
+                  }
+                  return result
+                },
+              })
+
+              // Create indicator on chart
+              const isOverlay = subscription.metadata.paneId === 'candle_pane'
+              chart.createIndicator(
+                { name: templateName },
+                isOverlay,
+                isOverlay ? { id: 'candle_pane' } : undefined
+              )
+
+              // Wire up data handlers
+              subscription.onData((points: any[]) => {
+                console.log(`[DEBUG chart] onData received: points=${Array.isArray(points) ? points.length : typeof points}`)
+                dataStore.clear()
+                if (Array.isArray(points)) {
+                  for (const point of points) {
+                    dataStore.set(point.timestamp, point)
+                  }
+                } else {
+                  console.log(`[DEBUG chart] WARNING: points is not an array!`, points)
+                }
+                console.log(`[DEBUG chart] dataStore size after onData: ${dataStore.size}`)
+                if (dataStore.size > 0) {
+                  const first = dataStore.values().next().value
+                  console.log(`[DEBUG chart] sample dataStore entry:`, JSON.stringify(first))
+                }
+                calcLogged = false // reset so calc logs again after new data
+                chart.overrideIndicator({ name: templateName })
+              })
+
+              subscription.onTick((point: any) => {
+                dataStore.set(point.timestamp, point)
+                chart.overrideIndicator({ name: templateName })
+              })
+
+              subscription.onError?.((error: Error) => {
+                console.error('Script execution error:', error)
+              })
+
+              setScriptEditorVisible(false)
             } catch (error) {
-              console.error('Script compilation failed:', error)
+              console.error('Script execution failed:', error)
             }
           }}
           onSave={async (code, name) => {

@@ -15,8 +15,12 @@ export interface SymbolInfo {
 }
 
 export interface Period {
-  multiplier: number
-  timespan: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
+  /** klinecharts format: type + span */
+  type?: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
+  span?: number
+  /** Legacy format: timespan + multiplier */
+  multiplier?: number
+  timespan?: 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
   text: string
 }
 

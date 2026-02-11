@@ -144,6 +144,15 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
     console.log(`⚙️  Executing script (${scriptId.substring(0, 8)})...`)
     const dataPoints = executor.execute(parsed, candles, message.settings)
 
+    // DEBUG: Log what we're about to send
+    console.log(`[DEBUG server] metadata plots:`, JSON.stringify(parsed.metadata.plots))
+    console.log(`[DEBUG server] dataPoints count: ${dataPoints.length}`)
+    const nonEmpty = dataPoints.filter(dp => Object.keys(dp.values).length > 0)
+    console.log(`[DEBUG server] dataPoints with values: ${nonEmpty.length}`)
+    if (nonEmpty.length > 0) {
+      console.log(`[DEBUG server] sample dataPoint:`, JSON.stringify(nonEmpty[0]))
+    }
+
     // Send subscription acknowledgment
     const ackResponse: ExecuteResponse = {
       type: 'subscribeAck',
@@ -151,6 +160,7 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
       scriptId,
       metadata: parsed.metadata,
     }
+    console.log(`[DEBUG server] sending subscribeAck with metadata:`, JSON.stringify(parsed.metadata))
     ws.send(JSON.stringify(ackResponse))
 
     // Send initial data
@@ -159,6 +169,7 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
       scriptId,
       data: dataPoints,
     }
+    console.log(`[DEBUG server] sending indicatorData with ${dataPoints.length} points`)
     ws.send(JSON.stringify(dataResponse))
 
     // Subscribe to real-time updates

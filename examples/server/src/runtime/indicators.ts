@@ -6,11 +6,45 @@
 import talib from 'talib'
 
 export class Indicators {
+
+  /**
+   * Safely execute a TA-Lib function.
+   * Replaces NaN values in the input with 0, then restores NaN positions in the output.
+   * Returns a NaN-filled array if TA-Lib fails.
+   */
+  private safeExecute(params: any): any {
+    // Sanitize NaN values in numeric array inputs — TA-Lib can't handle them
+    const sanitized = { ...params }
+
+    for (const key of Object.keys(sanitized)) {
+      const val = sanitized[key]
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'number') {
+        sanitized[key] = val.map((v: number) => (isNaN(v) || v === null || v === undefined) ? 0 : v)
+      }
+    }
+
+    try {
+      const result = talib.execute(sanitized as any)
+      if (!result || result.begIndex === undefined) {
+        const len = (sanitized.endIdx ?? 0) + 1
+        return { begIndex: 0, nbElement: len, result: { outReal: new Array(len).fill(NaN) } }
+      }
+      return result
+    } catch (error) {
+      console.error(`TA-Lib error for ${params.name}:`, error)
+      const len = (sanitized.endIdx ?? 0) + 1
+      return { begIndex: 0, nbElement: len, result: { outReal: new Array(len).fill(NaN) } }
+    }
+  }
+
   /**
    * Simple Moving Average
    */
   sma(source: number[], length: number): number[] {
-    const result = talib.execute({
+    // TA-Lib SMA minimum period is 2; period=1 is identity
+    if (length <= 1) return source.slice()
+
+    const result = this.safeExecute({
       name: 'SMA',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -18,7 +52,6 @@ export class Indicators {
       optInTimePeriod: length
     })
 
-    // Pad the beginning with NaN to match input length
     const output = new Array(result.begIndex).fill(NaN)
     return output.concat(result.result.outReal)
   }
@@ -27,7 +60,10 @@ export class Indicators {
    * Exponential Moving Average
    */
   ema(source: number[], length: number): number[] {
-    const result = talib.execute({
+    // TA-Lib EMA minimum period is 2; period=1 is identity
+    if (length <= 1) return source.slice()
+
+    const result = this.safeExecute({
       name: 'EMA',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -43,7 +79,10 @@ export class Indicators {
    * Weighted Moving Average
    */
   wma(source: number[], length: number): number[] {
-    const result = talib.execute({
+    // TA-Lib WMA minimum period is 2; period=1 is identity
+    if (length <= 1) return source.slice()
+
+    const result = this.safeExecute({
       name: 'WMA',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -88,7 +127,7 @@ export class Indicators {
    * Relative Strength Index
    */
   rsi(source: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'RSI',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -109,7 +148,7 @@ export class Indicators {
     slowLength: number,
     signalLength: number
   ): { macd: number[]; signal: number[]; histogram: number[] } {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'MACD',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -136,7 +175,7 @@ export class Indicators {
     length: number,
     mult: number
   ): { upper: number[]; middle: number[]; lower: number[] } {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'BBANDS',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -160,7 +199,7 @@ export class Indicators {
    * Average True Range
    */
   atr(high: number[], low: number[], close: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'ATR',
       startIdx: 0,
       endIdx: high.length - 1,
@@ -178,7 +217,7 @@ export class Indicators {
    * Stochastic Oscillator
    */
   stochastic(close: number[], high: number[], low: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'STOCH',
       startIdx: 0,
       endIdx: close.length - 1,
@@ -201,7 +240,7 @@ export class Indicators {
    * Standard Deviation
    */
   stdev(source: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'STDDEV',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -218,7 +257,7 @@ export class Indicators {
    * Sum of values over length
    */
   sum(source: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'SUM',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -234,7 +273,7 @@ export class Indicators {
    * Highest value over length
    */
   highest(source: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'MAX',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -250,7 +289,7 @@ export class Indicators {
    * Lowest value over length
    */
   lowest(source: number[], length: number): number[] {
-    const result = talib.execute({
+    const result = this.safeExecute({
       name: 'MIN',
       startIdx: 0,
       endIdx: source.length - 1,
@@ -310,7 +349,7 @@ export class Indicators {
    * This allows access to all 100+ indicators without explicit wrappers
    */
   execute(functionName: string, params: any): any {
-    return talib.execute({
+    return this.safeExecute({
       name: functionName,
       ...params
     })
