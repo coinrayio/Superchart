@@ -59,9 +59,33 @@ export class PineScriptParser {
       }
     }
 
+    // Support study() declaration (Pine v4)
+    const studyMatch = code.match(/study\s*\(\s*(?:title\s*=\s*)?["']([^"']+)["']/i)
+    if (studyMatch && !indicatorMatch) {
+      indicatorName = studyMatch[1]
+      shortName = indicatorName.substring(0, 10)
+
+      const shortTitleMatch = code.match(/shorttitle\s*=\s*["']([^"']+)["']/i)
+      if (shortTitleMatch) {
+        shortName = shortTitleMatch[1]
+      }
+
+      const overlayMatch = code.match(/overlay\s*=\s*(true|false)/i)
+      if (overlayMatch && overlayMatch[1] === 'true') {
+        paneId = 'candle_pane'
+      } else {
+        paneId = indicatorName.toLowerCase().replace(/\s+/g, '_')
+      }
+
+      const precisionMatch = code.match(/precision\s*=\s*(\d+)/i)
+      if (precisionMatch) {
+        precision = parseInt(precisionMatch[1])
+      }
+    }
+
     // Also support strategy declaration
     const strategyMatch = code.match(/strategy\s*\(\s*(?:title\s*=\s*)?["']([^"']+)["']/i)
-    if (strategyMatch && !indicatorMatch) {
+    if (strategyMatch && !indicatorMatch && !studyMatch) {
       indicatorName = strategyMatch[1]
       shortName = indicatorName.substring(0, 10)
 
@@ -127,6 +151,41 @@ export class PineScriptParser {
       })
     }
 
+    // Build var → series mapping for plot assignments (e.g., upl=plot(up,...) → upl→up)
+    const plotVarMap = new Map<string, string>()
+    const plotAssignRegex = /(\w+)\s*=\s*plot\s*\(([^,)]+)/gi
+    while ((match = plotAssignRegex.exec(code)) !== null) {
+      plotVarMap.set(match[1].trim(), match[2].trim())
+    }
+
+    // Build color variable map (e.g., bullColor = color.green → bullColor → '#00FF00')
+    const colorVarMap = new Map<string, string>()
+    // Match simple color assignments: varName = color.name
+    const colorAssignRegex = /(\w+)\s*=\s*color\.(\w+)\s*$/gm
+    while ((match = colorAssignRegex.exec(code)) !== null) {
+      const varName = match[1].trim()
+      const colorName = match[2].trim()
+      if (colorName !== 'new' && colorName !== 'rgb') {
+        colorVarMap.set(varName, this.mapColorName(colorName))
+      }
+    }
+    // Match color.new assignments: varName = color.new(color.name, transp)
+    const colorNewRegex = /(\w+)\s*=\s*color\.new\s*\(\s*(?:color\.)?(\w+)\s*,\s*(\d+)\s*\)/gi
+    while ((match = colorNewRegex.exec(code)) !== null) {
+      const varName = match[1].trim()
+      const baseColor = this.mapColorName(match[2].trim())
+      const transp = parseInt(match[3])
+      colorVarMap.set(varName, this.addTransparency(baseColor, transp))
+    }
+    // Match color.rgb assignments: varName = color.rgb(r, g, b, transp?)
+    const colorRgbAssignRegex = /(\w+)\s*=\s*color\.rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/gi
+    while ((match = colorRgbAssignRegex.exec(code)) !== null) {
+      const varName = match[1].trim()
+      const [, , r, g, b, a] = match
+      const alpha = a ? 1 - parseInt(a) / 100 : 1
+      colorVarMap.set(varName, `rgba(${r}, ${g}, ${b}, ${alpha})`)
+    }
+
     // Parse plot statements (supports multiple parameters)
     const plotRegex = /plot\s*\(([^,)]+)(?:,([^)]+))?\)/gi
     while ((match = plotRegex.exec(code)) !== null) {
@@ -144,7 +203,7 @@ export class PineScriptParser {
       const titleMatch = params.match(/title\s*=\s*["']([^"']+)["']/)
       if (titleMatch) config.title = titleMatch[1]
 
-      // Color can be color.rgb(), color.new(), #hex, or color.name
+      // Color can be color.rgb(), color.new(), #hex, color.name, variable ref, or ternary expression
       const colorRgbMatch = params.match(/color\s*=\s*color\.rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?\s*\)/)
       if (colorRgbMatch) {
         const [, r, g, b, a] = colorRgbMatch
@@ -154,8 +213,19 @@ export class PineScriptParser {
         const colorMatch = params.match(/color\s*=\s*(?:color\.)?(\w+|#[0-9a-f]+)/i)
         if (colorMatch) {
           const colorValue = colorMatch[1]
-          // Map Pine Script color names to hex
-          config.color = this.mapColorName(colorValue)
+          // Resolve color variable references, then map color names
+          config.color = colorVarMap.get(colorValue) || this.mapColorName(colorValue)
+        } else {
+          // Handle ternary/parenthesized color expressions: color=(cond ? colorA : colorB)
+          // Extract the first recognizable color variable from the expression
+          const ternaryColorMatch = params.match(/color\s*=\s*\(?\s*\w+\s*\?\s*(?:color\.)?(\w+)\s*:/i)
+          if (ternaryColorMatch) {
+            const cval = ternaryColorMatch[1]
+            // Resolve color, then strip transparency — for gapConnect, alpha only controls visibility
+            const resolvedColor = colorVarMap.get(cval) || this.mapColorName(cval)
+            config.color = this.makeOpaque(resolvedColor)
+            config.gapConnect = true
+          }
         }
       }
 
@@ -207,15 +277,21 @@ export class PineScriptParser {
     // Parse fill statements (fill between two plots/hlines)
     const fillRegex = /fill\s*\(([^,)]+)\s*,\s*([^,)]+)(?:,([^)]+))?\)/gi
     while ((match = fillRegex.exec(code)) !== null) {
-      const plot1 = match[1].trim()
-      const plot2 = match[2].trim()
+      const plot1Ref = match[1].trim()
+      const plot2Ref = match[2].trim()
       const params = match[3] || ''
 
+      // Resolve variable references to plot series keys
+      // e.g., fill(mabl, mbbl) → mabl was `plot(mab,...)` → plotKey1='mab'
+      // For hlines: fill(h0, h1) → h0 IS a plot key in the plots map
+      const plotKey1 = plotVarMap.get(plot1Ref) || plot1Ref
+      const plotKey2 = plotVarMap.get(plot2Ref) || plot2Ref
+
       const config: Record<string, unknown> = {
-        plot1,
-        plot2,
+        plot1: plotKey1,
+        plot2: plotKey2,
         color: 'rgba(33, 150, 243, 0.1)',
-        title: `Fill ${plot1}/${plot2}`,
+        title: `Fill ${plot1Ref}/${plot2Ref}`,
       }
 
       const titleMatch = params.match(/title\s*=\s*["']([^"']+)["']/)
@@ -238,10 +314,11 @@ export class PineScriptParser {
       const transpMatch = params.match(/transp\s*=\s*(\d+)/)
       if (transpMatch) config.transp = parseInt(transpMatch[1])
 
-      plots.set(`fill_${plot1}_${plot2}`, { type: 'fill', config })
+      plots.set(`fill_${plotKey1}_${plotKey2}`, { type: 'fill', config })
     }
 
-    // Parse plotshape statements
+    // Parse plotshape statements (use sequential IDs for consistent matching with executor)
+    let plotshapeIndex = 0
     const plotshapeRegex = /plotshape\s*\(([^,)]+)(?:,([^)]+))?\)/gi
     while ((match = plotshapeRegex.exec(code)) !== null) {
       const condition = match[1].trim()
@@ -250,10 +327,10 @@ export class PineScriptParser {
       const config: Record<string, unknown> = {
         series: condition,
         title: 'Shape',
-        style: 'shape.xcross',
-        location: 'location.abovebar',
+        style: 'xcross',
+        location: 'abovebar',
         color: '#2196F3',
-        size: 'size.small',
+        size: 'small',
       }
 
       const titleMatch = params.match(/title\s*=\s*["']([^"']+)["']/)
@@ -266,12 +343,24 @@ export class PineScriptParser {
       if (locationMatch) config.location = locationMatch[1]
 
       const colorMatch = params.match(/color\s*=\s*(?:color\.)?(\w+|#[0-9a-f]+)/i)
-      if (colorMatch) config.color = this.mapColorName(colorMatch[1])
+      if (colorMatch) {
+        const cval = colorMatch[1]
+        config.color = colorVarMap.get(cval) || this.mapColorName(cval)
+      }
 
       const sizeMatch = params.match(/size\s*=\s*size\.(\w+)/)
       if (sizeMatch) config.size = sizeMatch[1]
 
-      plots.set(`shape_${condition}`, { type: 'plotshape', config })
+      const textMatch = params.match(/text\s*=\s*["']([^"']+)["']/)
+      if (textMatch) config.text = textMatch[1]
+
+      const textcolorMatch = params.match(/textcolor\s*=\s*(?:color\.)?(\w+|#[0-9a-f]+)/i)
+      if (textcolorMatch) {
+        const tcval = textcolorMatch[1]
+        config.textcolor = colorVarMap.get(tcval) || this.mapColorName(tcval)
+      }
+
+      plots.set(`plotshape_${plotshapeIndex++}`, { type: 'plotshape', config })
     }
 
     // Build metadata
@@ -305,14 +394,39 @@ export class PineScriptParser {
           title: config.title as string || id,
           color: config.color as string,
           linewidth: config.linewidth as number,
+          gapConnect: config.gapConnect as boolean | undefined,
         })
       } else if (type === 'hline') {
         result.push({
           type: 'hline',
+          id,
           price: config.price as number,
           title: config.title as string,
           color: config.color as string,
           linestyle: config.linestyle as 'solid' | 'dashed' | 'dotted',
+        })
+      } else if (type === 'plotshape') {
+        result.push({
+          type: 'plotshape',
+          id,
+          series: config.series as string,
+          title: config.title as string,
+          style: config.style as string,
+          location: config.location as string,
+          color: config.color as string,
+          size: config.size as string,
+          text: config.text as string | undefined,
+          textcolor: config.textcolor as string | undefined,
+          linewidth: config.linewidth as number | undefined,
+        })
+      } else if (type === 'fill') {
+        result.push({
+          type: 'fill',
+          id,
+          plot1: config.plot1 as string,
+          plot2: config.plot2 as string,
+          color: config.color as string,
+          transp: config.transp as number | undefined,
         })
       }
     }
@@ -355,7 +469,12 @@ export class PineScriptParser {
     } else {
       // int or float
       const parsed = parseFloat(trimmedVal)
-      return isNaN(parsed) ? 14 : parsed
+      if (isNaN(parsed)) {
+        // Could be a variable reference (e.g., 'close', 'open', 'high', 'low')
+        // Preserve as string for later resolution in the executor
+        return trimmedVal
+      }
+      return parsed
     }
   }
 
@@ -412,6 +531,18 @@ export class PineScriptParser {
     const b = parseInt(hex.substring(4, 6), 16)
 
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
+  private makeOpaque(color: string): string {
+    // Strip transparency from a color, returning it at full opacity
+    if (color.startsWith('rgba(')) {
+      return color.replace(/,\s*[\d.]+\)$/, ', 1)')
+    }
+    if (color.startsWith('#') && color.length === 9) {
+      // #RRGGBBAA → #RRGGBB
+      return color.substring(0, 7)
+    }
+    return color
   }
 
   private addError(line: number, column: number, message: string) {

@@ -77,7 +77,7 @@ wss.on('connection', (ws: WebSocket) => {
       }
     } catch (error) {
       console.error('Error handling message:', error)
-      sendError(ws, error.message)
+      sendError(ws, (error as Error).message)
     }
   })
 
@@ -117,7 +117,7 @@ async function handleCompile(ws: WebSocket, message: CompileRequest) {
 
     ws.send(JSON.stringify(response))
   } catch (error) {
-    sendError(ws, `Compilation error: ${error.message}`, message.requestId)
+    sendError(ws, `Compilation error: ${(error as Error).message}`, message.requestId)
   }
 }
 
@@ -144,15 +144,6 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
     console.log(`⚙️  Executing script (${scriptId.substring(0, 8)})...`)
     const dataPoints = executor.execute(parsed, candles, message.settings)
 
-    // DEBUG: Log what we're about to send
-    console.log(`[DEBUG server] metadata plots:`, JSON.stringify(parsed.metadata.plots))
-    console.log(`[DEBUG server] dataPoints count: ${dataPoints.length}`)
-    const nonEmpty = dataPoints.filter(dp => Object.keys(dp.values).length > 0)
-    console.log(`[DEBUG server] dataPoints with values: ${nonEmpty.length}`)
-    if (nonEmpty.length > 0) {
-      console.log(`[DEBUG server] sample dataPoint:`, JSON.stringify(nonEmpty[0]))
-    }
-
     // Send subscription acknowledgment
     const ackResponse: ExecuteResponse = {
       type: 'subscribeAck',
@@ -160,7 +151,6 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
       scriptId,
       metadata: parsed.metadata,
     }
-    console.log(`[DEBUG server] sending subscribeAck with metadata:`, JSON.stringify(parsed.metadata))
     ws.send(JSON.stringify(ackResponse))
 
     // Send initial data
@@ -169,7 +159,6 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
       scriptId,
       data: dataPoints,
     }
-    console.log(`[DEBUG server] sending indicatorData with ${dataPoints.length} points`)
     ws.send(JSON.stringify(dataResponse))
 
     // Subscribe to real-time updates
@@ -224,7 +213,7 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
     console.log(`✅ Script ${scriptId.substring(0, 8)} executing successfully`)
   } catch (error) {
     console.error('Error executing script:', error)
-    sendError(ws, `Execution error: ${error.message}`, message.requestId, scriptId)
+    sendError(ws, `Execution error: ${(error as Error).message}`, message.requestId, scriptId)
   }
 }
 
@@ -259,6 +248,15 @@ function sendError(ws: WebSocket, error: string, requestId?: string, scriptId?: 
   }
   ws.send(JSON.stringify(errorMessage))
 }
+
+// Catch uncaught exceptions / unhandled rejections so the server doesn't silently die
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT EXCEPTION (server stayed alive):', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION (server stayed alive):', reason)
+})
 
 // Graceful shutdown
 process.on('SIGINT', () => {

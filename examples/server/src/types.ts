@@ -89,6 +89,7 @@ export interface PlotLine {
   color?: string
   linewidth?: number
   style?: 'line' | 'stepline' | 'histogram' | 'cross' | 'areabr' | 'area' | 'columns' | 'circles'
+  gapConnect?: boolean
 }
 
 export interface PlotHistogram {
@@ -101,6 +102,7 @@ export interface PlotHistogram {
 
 export interface PlotHLine {
   type: 'hline'
+  id: string
   price: number
   title?: string
   color?: string
@@ -117,6 +119,9 @@ export interface PlotShape {
   location?: string
   color?: string
   size?: string
+  text?: string
+  textcolor?: string
+  linewidth?: number
 }
 
 export interface PlotChar {
@@ -154,9 +159,11 @@ export interface PlotCandle {
 
 export interface PlotFill {
   type: 'fill'
+  id: string
   plot1: string
   plot2: string
   color?: string
+  transp?: number
 }
 
 export interface PlotBgColor {

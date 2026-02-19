@@ -314,6 +314,14 @@ function createScriptLinter(def: ScriptLanguageDefinition): Extension {
     const diagnostics: Diagnostic[] = []
     const text = view.state.doc.toString()
 
+    // Detect user-defined function declarations: name(params) =>
+    const userFunctions = new Set<string>()
+    const funcDeclPattern = /^(\w+)\s*\([^)]*\)\s*=>/gm
+    let funcDeclMatch: RegExpExecArray | null
+    while ((funcDeclMatch = funcDeclPattern.exec(text)) !== null) {
+      userFunctions.add(funcDeclMatch[1])
+    }
+
     // Function call pattern: matches dotted names like input.int, ta.sma, or simple names like sma
     // Matches: functionName (with optional dots) followed by (
     const functionCallPattern = /([a-zA-Z_]\w*(?:\.\w+)*)\s*\(/g
@@ -323,8 +331,8 @@ function createScriptLinter(def: ScriptLanguageDefinition): Extension {
       const functionName = match[1]
       const startPos = match.index
 
-      // Skip if it's a keyword
-      if (keywordSet.has(functionName)) {
+      // Skip if it's a keyword or user-defined function
+      if (keywordSet.has(functionName) || userFunctions.has(functionName)) {
         continue
       }
 

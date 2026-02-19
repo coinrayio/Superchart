@@ -59,20 +59,133 @@ export class PineScriptExecutor {
         islastconfirmedhistory: false
       },
 
-      // Special na value
+      // Special na value (used as value in expressions like `x ? y : na`)
       na: NaN,
 
-      // Input namespace (these return the configured input values)
-      input: {
-        int: (defval: number, _title?: string, _minval?: number, _maxval?: number, _step?: number) => defval,
-        float: (defval: number, _title?: string, _minval?: number, _maxval?: number, _step?: number) => defval,
-        bool: (defval: boolean, _title?: string) => defval,
-        string: (defval: string, _title?: string, _options?: string[]) => defval,
-        color: (defval: string, _title?: string) => defval,
-        source: (defval: number[], _title?: string) => defval,
-        timeframe: (defval: string, _title?: string) => defval,
-        symbol: (defval: string, _title?: string) => defval,
+      // na() function form (used in v4 like `na(x)` to check for NaN)
+      _isNa: (x: unknown) => {
+        if (Array.isArray(x)) return x.map((v: any) => v === null || v === undefined || (typeof v === 'number' && isNaN(v)))
+        return x === null || x === undefined || (typeof x === 'number' && isNaN(x))
       },
+
+      // Pine Script lookback: series[n] means "shift series by n bars"
+      // Returns a new array where result[i] = series[i - n] (NaN for i < n)
+      _lb: (series: unknown, n: unknown): number[] | number => {
+        if (!Array.isArray(series)) return series as number
+        const shift = typeof n === 'number' ? n : 0
+        if (shift === 0) return series
+        return series.map((_: any, i: number) => i >= shift ? series[i - shift] : NaN)
+      },
+
+      // Element-wise comparison helpers for array-vs-array and array-vs-scalar
+      _gt: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v > b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v > (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) > v)
+        return (a as number) > (b as number)
+      },
+      _lt: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v < b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v < (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) < v)
+        return (a as number) < (b as number)
+      },
+      _gte: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v >= b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v >= (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) >= v)
+        return (a as number) >= (b as number)
+      },
+      _lte: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v <= b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v <= (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) <= v)
+        return (a as number) <= (b as number)
+      },
+      _eq: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v === b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v === b)
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => a === v)
+        return a === b
+      },
+      _neq: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v !== b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v !== b)
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => a !== v)
+        return a !== b
+      },
+
+      // Element-wise boolean operators
+      _and: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v && b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v && b)
+        if (Array.isArray(b)) return (b as boolean[]).map((v: any) => a && v)
+        return (a as boolean) && (b as boolean)
+      },
+      _or: (a: unknown, b: unknown): boolean[] | boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v || b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v || b)
+        if (Array.isArray(b)) return (b as boolean[]).map((v: any) => a || v)
+        return (a as boolean) || (b as boolean)
+      },
+      _not: (a: unknown): boolean[] | boolean => {
+        if (Array.isArray(a)) return a.map((v: any) => !v)
+        return !(a as boolean)
+      },
+
+      // Element-wise ternary: _tern(cond, trueVal, falseVal)
+      _tern: (cond: unknown, a: unknown, b: unknown): unknown => {
+        if (Array.isArray(cond)) {
+          return (cond as boolean[]).map((c: any, i: number) => {
+            const aVal = Array.isArray(a) ? a[i] : a
+            const bVal = Array.isArray(b) ? b[i] : b
+            return c ? aVal : bVal
+          })
+        }
+        return cond ? a : b
+      },
+
+      // Element-wise arithmetic on arrays
+      _add: (a: unknown, b: unknown): number[] | number => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v + b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v + (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) + v)
+        return (a as number) + (b as number)
+      },
+      _sub: (a: unknown, b: unknown): number[] | number => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v - b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v - (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) - v)
+        return (a as number) - (b as number)
+      },
+      _mul: (a: unknown, b: unknown): number[] | number => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => v * b[i])
+        if (Array.isArray(a)) return a.map((v: any) => v * (b as number))
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => (a as number) * v)
+        return (a as number) * (b as number)
+      },
+      _div: (a: unknown, b: unknown): number[] | number => {
+        if (Array.isArray(a) && Array.isArray(b)) return a.map((v: any, i: number) => b[i] !== 0 ? v / b[i] : NaN)
+        if (Array.isArray(a)) return a.map((v: any) => (b as number) !== 0 ? v / (b as number) : NaN)
+        if (Array.isArray(b)) return (b as number[]).map((v: any) => v !== 0 ? (a as number) / v : NaN)
+        return (b as number) !== 0 ? (a as number) / (b as number) : NaN
+      },
+
+      // Input namespace (v5+) and bare function (v4 compat)
+      // input is callable as input(defval, ...) for v4, and has .int/.float/etc. for v5+
+      input: Object.assign(
+        (defval: unknown, ..._args: unknown[]) => defval,
+        {
+          int: (defval: number, ..._args: unknown[]) => defval,
+          float: (defval: number, ..._args: unknown[]) => defval,
+          bool: (defval: boolean, ..._args: unknown[]) => defval,
+          string: (defval: string, ..._args: unknown[]) => defval,
+          color: (defval: string, ..._args: unknown[]) => defval,
+          source: (defval: number[], ..._args: unknown[]) => defval,
+          timeframe: (defval: string, ..._args: unknown[]) => defval,
+          symbol: (defval: string, ..._args: unknown[]) => defval,
+        }
+      ),
 
       // String namespace functions (Pine v5+)
       str: {
@@ -222,46 +335,49 @@ export class PineScriptExecutor {
         })
       },
       pivothigh: (source: number[], leftbars: number, rightbars: number) => {
-        return source.map((val, i) => {
-          if (i < leftbars || i >= source.length - rightbars) return NaN
-
+        // Pine Script semantics: pivothigh at bar i reports whether bar (i - rightbars)
+        // is a pivot high. The detection is delayed by rightbars bars because Pine needs
+        // to see rightbars future bars to confirm the pivot.
+        const result = new Array(source.length).fill(NaN)
+        for (let i = 0; i < source.length; i++) {
+          if (i < leftbars || i + rightbars >= source.length) continue
+          const val = source[i]
           let isPivot = true
           for (let j = i - leftbars; j < i; j++) {
-            if (source[j] >= val) {
-              isPivot = false
-              break
+            if (source[j] >= val) { isPivot = false; break }
+          }
+          if (isPivot) {
+            for (let j = i + 1; j <= i + rightbars; j++) {
+              if (source[j] >= val) { isPivot = false; break }
             }
           }
-          for (let j = i + 1; j <= i + rightbars; j++) {
-            if (source[j] >= val) {
-              isPivot = false
-              break
-            }
+          if (isPivot) {
+            result[i + rightbars] = val
           }
-
-          return isPivot ? val : NaN
-        })
+        }
+        return result
       },
       pivotlow: (source: number[], leftbars: number, rightbars: number) => {
-        return source.map((val, i) => {
-          if (i < leftbars || i >= source.length - rightbars) return NaN
-
+        // Pine Script semantics: pivotlow at bar i reports whether bar (i - rightbars)
+        // is a pivot low. The detection is delayed by rightbars bars.
+        const result = new Array(source.length).fill(NaN)
+        for (let i = 0; i < source.length; i++) {
+          if (i < leftbars || i + rightbars >= source.length) continue
+          const val = source[i]
           let isPivot = true
           for (let j = i - leftbars; j < i; j++) {
-            if (source[j] <= val) {
-              isPivot = false
-              break
+            if (source[j] <= val) { isPivot = false; break }
+          }
+          if (isPivot) {
+            for (let j = i + 1; j <= i + rightbars; j++) {
+              if (source[j] <= val) { isPivot = false; break }
             }
           }
-          for (let j = i + 1; j <= i + rightbars; j++) {
-            if (source[j] <= val) {
-              isPivot = false
-              break
-            }
+          if (isPivot) {
+            result[i + rightbars] = val
           }
-
-          return isPivot ? val : NaN
-        })
+        }
+        return result
       },
 
       // Utility functions (na handling)
@@ -554,6 +670,16 @@ export class PineScriptExecutor {
 
       // Results storage
       _plots: new Map<string, number[]>(),
+      _plotColors: new Map<string, string[]>(),
+    }
+
+    // Resolve variable references in input defaults (e.g., defval=close → actual close array)
+    const builtInSeries = new Set(['close', 'open', 'high', 'low', 'volume', 'hl2', 'hlc3', 'ohlc4', 'time'])
+    for (const [key] of script.inputs.entries()) {
+      const val = context[key]
+      if (typeof val === 'string' && builtInSeries.has(val)) {
+        context[key] = context[val]
+      }
     }
 
     return context
@@ -568,10 +694,6 @@ export class PineScriptExecutor {
       // Extract the calculation logic (everything after indicator declaration)
       const calculationCode = this.extractCalculationCode(code)
 
-      // Inject a console reference for debug logging inside the generated function
-      context._console = console
-      context._debugEnabled = true
-
       // Create a function that executes the script logic
       const fn = new Function(...Object.keys(context), calculationCode)
 
@@ -580,15 +702,21 @@ export class PineScriptExecutor {
 
       // Build data points from plot results
       const plots = context._plots as Map<string, number[]>
+      const plotColors = context._plotColors as Map<string, string[]>
 
-      // DEBUG: Log _plots contents after execution
-      console.log('[DEBUG executor] _plots size:', plots.size)
-      for (const [key, series] of plots.entries()) {
-        const nonNaN = series.filter(v => !isNaN(v) && v !== null && v !== undefined)
-        console.log(`[DEBUG executor] plot "${key}": length=${series.length}, nonNaN=${nonNaN.length}, first5=${series.slice(0, 5)}, last5=${series.slice(-5)}`)
+      // Debug: log per-bar color info
+      if (plotColors.size > 0) {
+        for (const [key, colorSeries] of plotColors.entries()) {
+          const isArray = Array.isArray(colorSeries)
+          const nonNull = isArray ? colorSeries.filter(c => c != null).length : 0
+          const sample = isArray ? colorSeries.filter(c => c != null).slice(0, 3) : colorSeries
+          console.log(`[Executor] plotColors["${key}"]: isArray=${isArray}, nonNull=${nonNull}, sample=`, sample)
+        }
+      } else {
+        console.log('[Executor] plotColors is empty (no per-bar colors extracted)')
       }
 
-      return this.buildDataPoints(candles, plots)
+      return this.buildDataPoints(candles, plots, plotColors)
     } catch (error: any) {
       console.error('Script execution error:', error)
       throw new Error(`Script execution failed: ${(error as Error).message}`)
@@ -605,13 +733,31 @@ export class PineScriptExecutor {
       .replace(/strategy\s*\([\s\S]*?\)\s*\n?/i, '')
       .replace(/study\s*\([\s\S]*?\)\s*\n?/i, '')
 
+    // Strip inline comments (// ...) from each line, respecting strings
+    processed = processed.split('\n').map(line => {
+      let inStr = false
+      let strChar = ''
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inStr) {
+          if (ch === strChar && line[i - 1] !== '\\') inStr = false
+        } else if (ch === '"' || ch === "'") {
+          inStr = true
+          strChar = ch
+        } else if (ch === '/' && i + 1 < line.length && line[i + 1] === '/') {
+          return line.substring(0, i).trimEnd()
+        }
+      }
+      return line
+    }).join('\n')
+
     // Convert Pine hex color literals #RRGGBB / #RGB to JS strings '#RRGGBB'
     processed = processed.replace(/#([0-9a-fA-F]{6})\b/g, "'#$1'")
     processed = processed.replace(/#([0-9a-fA-F]{8})\b/g, "'#$1'")
     processed = processed.replace(/#([0-9a-fA-F]{3})\b/g, "'#$1'")
 
-    // Convert Pine-style ternary with 'na' keyword used as expression
-    // (na is already in context as NaN, so this should work as-is)
+    // Convert na() function calls to _isNa() (na is kept as NaN value in context)
+    processed = processed.replace(/\bna\s*\(/g, '_isNa(')
 
     // Convert Pine-style format constants (format.price, format.volume etc.)
     processed = processed.replace(/format\.price/g, "'price'")
@@ -652,6 +798,13 @@ export class PineScriptExecutor {
     processed = processed.replace(/size\.huge/g, "'huge'")
     processed = processed.replace(/size\.auto/g, "'auto'")
 
+    // Convert Pine lookback notation: identifier[expr] → _lb(identifier, expr)
+    // This matches word[word], word[number], and word[expr] patterns
+    // But NOT function calls like func[0] or array literals - only known series vars
+    // We do multiple passes to handle nested lookbacks like osc[lbR]
+    processed = processed.replace(/\b([a-zA-Z_]\w*)\[([a-zA-Z_]\w*)\]/g, '_lb($1, $2)')
+    processed = processed.replace(/\b([a-zA-Z_]\w*)\[(\d+)\]/g, '_lb($1, $2)')
+
     // Convert Pine 'and' / 'or' / 'not' boolean operators to JS
     processed = processed.replace(/\band\b/g, '&&')
     processed = processed.replace(/\bor\b/g, '||')
@@ -670,11 +823,58 @@ export class PineScriptExecutor {
     // Handle the indented body lines after => function definitions
     // This requires line-by-line processing below
 
+    // Join multi-line expressions (unclosed parentheses) into single lines
+    const rawLines = processed.split('\n')
+    const lines: string[] = []
+    let accumulator = ''
+    let parenDepth = 0
+
+    for (const rawLine of rawLines) {
+      const trimmed = rawLine.trim()
+
+      // Skip empty lines and comments when not accumulating
+      if (parenDepth === 0 && (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*'))) {
+        if (!accumulator) {
+          lines.push(rawLine)
+        }
+        continue
+      }
+
+      accumulator = accumulator ? accumulator + ' ' + trimmed : rawLine
+
+      // Count parens (skip chars inside strings)
+      let inStr = false
+      let strChar = ''
+      for (let j = 0; j < trimmed.length; j++) {
+        const ch = trimmed[j]
+        if (inStr) {
+          if (ch === strChar && trimmed[j - 1] !== '\\') inStr = false
+        } else if (ch === '"' || ch === "'") {
+          inStr = true
+          strChar = ch
+        } else if (ch === '/' && j + 1 < trimmed.length && trimmed[j + 1] === '/') {
+          break // line comment, stop counting
+        } else if (ch === '(') {
+          parenDepth++
+        } else if (ch === ')') {
+          parenDepth--
+        }
+      }
+
+      if (parenDepth <= 0) {
+        lines.push(accumulator)
+        accumulator = ''
+        parenDepth = 0
+      }
+    }
+
+    if (accumulator) lines.push(accumulator)
+
     // Process lines
-    const lines = processed.split('\n')
     const processedLines: string[] = []
     let inFunctionBody = false
     let functionIndent = ''
+    let plotshapeIndex = 0
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
@@ -705,48 +905,78 @@ export class PineScriptExecutor {
           const nextIsBody = nextLine.startsWith(functionIndent) || nextLine.startsWith('\t')
 
           if (!nextIsBody || !nextTrimmed || nextTrimmed.startsWith('//')) {
-            // Last line of function body - add return
-            processedLines.push(`  return ${trimmed};`)
+            // Last line of function body - add return, transform expression
+            const bodyAssign = trimmed.match(/^(\w+)\s*=\s*(.+)$/)
+            if (bodyAssign) {
+              processedLines.push(`  ${bodyAssign[1]} = ${this.transformExpression(bodyAssign[2])};`)
+              processedLines.push(`  return ${bodyAssign[1]};`)
+            } else {
+              processedLines.push(`  return ${this.transformExpression(trimmed)};`)
+            }
             processedLines.push('}')
             inFunctionBody = false
           } else {
-            processedLines.push(`  ${trimmed};`)
+            const bodyAssign = trimmed.match(/^(\w+)\s*=\s*(.+)$/)
+            if (bodyAssign) {
+              processedLines.push(`  ${bodyAssign[1]} = ${this.transformExpression(bodyAssign[2])};`)
+            } else {
+              processedLines.push(`  ${trimmed};`)
+            }
           }
+          continue // Always continue after processing a function body line
         } else {
           // No longer indented - close function
           processedLines.push('}')
           inFunctionBody = false
           // Fall through to process this line normally
         }
+      }
 
-        if (inFunctionBody) continue
+      // Skip input declarations (values are already in context from parser)
+      if (trimmed.match(/^\w+\s*=\s*input(?:\.\w+)?\s*\(/)) {
+        processedLines.push(`// ${trimmed}`)
+        continue
       }
 
       // Transform plot calls to store results in _plots map
       if (trimmed.match(/^\w+\s*=\s*plot\s*\(/)) {
         // Variable assignment like: upl = plot(...)
-        // Extract the variable name and first argument
-        const assignMatch = trimmed.match(/^(\w+)\s*=\s*plot\s*\(([^,)]+)/)
+        // Extract the variable name and first argument (handle ternary with balanced parens)
+        const assignMatch = trimmed.match(/^(\w+)\s*=\s*plot\s*\(/)
         if (assignMatch) {
           const varName = assignMatch[1]
-          const series = assignMatch[2].trim()
-          processedLines.push(`${varName} = ${series}; _plots.set('${varName}', ${varName});`)
+          const series = this.extractFirstPlotArg(trimmed.substring(assignMatch[0].length))
+          const transformed = this.transformExpression(series)
+          // Reverse _lb() back to [] notation in key to match parser's original series key
+          const seriesKey = series.trim().replace(/_lb\((\w+),\s*(\w+)\)/g, '$1[$2]')
+          processedLines.push(`${varName} = ${transformed}; _plots.set('${seriesKey}', ${varName});`)
         } else {
           processedLines.push(trimmed)
         }
       } else if (trimmed.startsWith('plot(')) {
-        const plotMatch = trimmed.match(/plot\s*\(\s*([^,)]+)/)
-        if (plotMatch) {
-          const varName = plotMatch[1].trim()
-          // Use the series variable name as the plot key (must match parser's plot id)
-          if (varName.includes('?')) {
-            // Ternary: use a generated key
-            const titleMatch = trimmed.match(/title\s*=\s*["']([^"']+)["']/)
-            const plotKey = titleMatch ? titleMatch[1] : `plot_${processedLines.length}`
-            processedLines.push(`_plots.set('${plotKey}', (${varName}));`)
-          } else {
-            processedLines.push(`_plots.set('${varName}', ${varName});`)
+        const series = this.extractFirstPlotArg(trimmed.substring(5))
+        const transformed = this.transformExpression(series)
+        // Reverse _lb() back to [] notation in key to match parser's original series key
+        const seriesKey = series.trim().replace(/_lb\((\w+),\s*(\w+)\)/g, '$1[$2]')
+        // Check for offset parameter (e.g., offset=-lbR)
+        const offsetMatch = trimmed.match(/\boffset\s*=\s*([^,)]+)/)
+        // Check for ternary color parameter (e.g., color=(cond ? colorA : colorB))
+        const colorTernaryMatch = trimmed.match(/\bcolor\s*=\s*\(?\s*(\w+\s*\?\s*\w+\s*:\s*\w+)\s*\)?/)
+        const colorExpr = colorTernaryMatch ? this.transformExpression(colorTernaryMatch[1].trim()) : null
+        if (offsetMatch) {
+          const offsetExpr = this.transformExpression(offsetMatch[1].trim())
+          let code = `{ const __r = (${transformed}); const __off = (${offsetExpr}); if (__off !== 0 && Array.isArray(__r)) { const __s = new Array(__r.length).fill(NaN); for (let __i = 0; __i < __r.length; __i++) { const __src = __i - __off; if (__src >= 0 && __src < __r.length) __s[__i] = __r[__src]; } _plots.set('${seriesKey}', __s); } else { _plots.set('${seriesKey}', __r); }`
+          if (colorExpr) {
+            code += ` try { const __c = (${colorExpr}); if (typeof __off === 'number' && __off !== 0 && Array.isArray(__c)) { const __sc = new Array(__c.length).fill(null); for (let __i = 0; __i < __c.length; __i++) { const __src = __i - __off; if (__src >= 0 && __src < __c.length) __sc[__i] = __c[__src]; } _plotColors.set('${seriesKey}', __sc); } else { _plotColors.set('${seriesKey}', __c); } } catch(e) { /* color eval failed, use default */ }`
           }
+          code += ` }`
+          processedLines.push(code)
+        } else {
+          let code = `_plots.set('${seriesKey}', (${transformed}));`
+          if (colorExpr) {
+            code += ` try { _plotColors.set('${seriesKey}', (${colorExpr})); } catch(e) { /* color eval failed */ }`
+          }
+          processedLines.push(code)
         }
       } else if (trimmed.startsWith('hline(') || trimmed.match(/^\w+\s*=\s*hline\s*\(/)) {
         // hline calls are no-ops for now (horizontal lines are metadata)
@@ -757,18 +987,32 @@ export class PineScriptExecutor {
       } else if (trimmed.startsWith('bgcolor(')) {
         processedLines.push(`// ${trimmed}`)
       } else if (trimmed.startsWith('plotshape(')) {
-        processedLines.push(`// ${trimmed}`)
+        // Extract condition (first arg) and evaluate it to produce shape data
+        const series = this.extractFirstPlotArg(trimmed.substring(10))
+        const transformed = this.transformExpression(series)
+        const shapeKey = `plotshape_${plotshapeIndex++}`
+        // Check for offset parameter (e.g., offset=-lbR)
+        const shapeOffsetMatch = trimmed.match(/\boffset\s*=\s*([^,)]+)/)
+        // Convert boolean/value series: truthy → numeric value (or 1), falsy → NaN, then apply offset
+        if (shapeOffsetMatch) {
+          const shapeOffsetExpr = this.transformExpression(shapeOffsetMatch[1].trim())
+          processedLines.push(`{ const __sv = ${transformed}; const __mapped = Array.isArray(__sv) ? __sv.map(v => (v && v !== 0 && !isNaN(v)) ? (typeof v === 'boolean' ? 1 : v) : NaN) : __sv; const __off = (${shapeOffsetExpr}); if (__off !== 0 && Array.isArray(__mapped)) { const __s = new Array(__mapped.length).fill(NaN); for (let __i = 0; __i < __mapped.length; __i++) { const __src = __i - __off; if (__src >= 0 && __src < __mapped.length) __s[__i] = __mapped[__src]; } _plots.set('${shapeKey}', __s); } else { _plots.set('${shapeKey}', __mapped); } }`)
+        } else {
+          processedLines.push(`{ const __sv = ${transformed}; _plots.set('${shapeKey}', Array.isArray(__sv) ? __sv.map(v => (v && v !== 0 && !isNaN(v)) ? (typeof v === 'boolean' ? 1 : v) : NaN) : __sv); }`)
+        }
       } else if (trimmed.startsWith('plotchar(')) {
         processedLines.push(`// ${trimmed}`)
       } else if (trimmed.startsWith('alertcondition(')) {
         processedLines.push(`// ${trimmed}`)
       } else {
-        processedLines.push(trimmed)
-        // DEBUG: inject logging after variable assignments (e.g. "k = ta.sma(...)")
-        const assignMatch = trimmed.match(/^(\w+)\s*=\s*/)
-        if (assignMatch && !trimmed.startsWith('function ')) {
+        // Transform assignment expressions for element-wise array operations
+        const assignMatch = trimmed.match(/^(\w+)\s*=\s*(.+)$/)
+        if (assignMatch) {
           const varName = assignMatch[1]
-          processedLines.push(`if (typeof _console !== 'undefined' && _debugEnabled) _console.log('[DEBUG script] ${varName} =', typeof ${varName}, Array.isArray(${varName}) ? 'length=' + ${varName}.length : ${varName});`)
+          const rhs = assignMatch[2].replace(/;$/, '')
+          processedLines.push(`${varName} = ${this.transformExpression(rhs)}`)
+        } else {
+          processedLines.push(trimmed)
         }
       }
     }
@@ -778,17 +1022,259 @@ export class PineScriptExecutor {
       processedLines.push('}')
     }
 
-    const result = processedLines.join('\n')
+    return processedLines.join('\n')
+  }
 
-    // Debug: log the transpiled code
-    console.log('--- Transpiled JS ---')
-    console.log(result)
-    console.log('--- End ---')
+  /**
+   * Extract the first argument from a plot() call, handling ternary expressions.
+   * Input is the string AFTER "plot(" - e.g., "plFound ? osc[lbR] : na, title=..."
+   */
+  private extractFirstPlotArg(afterParen: string): string {
+    let depth = 0
+    let ternaryDepth = 0
+    let i = 0
+    const s = afterParen
+
+    while (i < s.length) {
+      const ch = s[i]
+      if (ch === '(' || ch === '[') depth++
+      else if (ch === ')' || ch === ']') {
+        if (depth === 0) {
+          // End of plot() call
+          return s.substring(0, i).trim()
+        }
+        depth--
+      } else if (ch === '?') ternaryDepth++
+      else if (ch === ':' && ternaryDepth > 0) ternaryDepth--
+      else if (ch === ',' && depth === 0 && ternaryDepth === 0) {
+        return s.substring(0, i).trim()
+      } else if (ch === '"' || ch === "'") {
+        // Skip string
+        const quote = ch
+        i++
+        while (i < s.length && s[i] !== quote) {
+          if (s[i] === '\\') i++
+          i++
+        }
+      }
+      i++
+    }
+    return s.trim()
+  }
+
+  /**
+   * Transform a line's expression to use element-wise helpers for array operations.
+   * Converts: a + b → _add(a, b), a > b → _gt(a, b), a && b → _and(a, b),
+   *           a ? b : c → _tern(a, b, c)
+   * Handles parentheses and function calls correctly.
+   */
+  private transformExpression(expr: string): string {
+    // Tokenize the expression
+    const tokens = this.tokenize(expr)
+    if (tokens.length === 0) return expr
+
+    // Transform from lowest to highest precedence
+    try {
+      const result = this.transformTernary(tokens, 0)
+      return result.text
+    } catch {
+      return expr // Fall back to original on any parse error
+    }
+  }
+
+  private tokenize(expr: string): string[] {
+    const tokens: string[] = []
+    let i = 0
+    while (i < expr.length) {
+      // Skip whitespace
+      if (/\s/.test(expr[i])) { i++; continue }
+
+      // String literals
+      if (expr[i] === '"' || expr[i] === "'") {
+        const quote = expr[i]
+        let j = i + 1
+        while (j < expr.length && expr[j] !== quote) {
+          if (expr[j] === '\\') j++
+          j++
+        }
+        tokens.push(expr.substring(i, j + 1))
+        i = j + 1
+        continue
+      }
+
+      // Two-char operators
+      if (i + 1 < expr.length) {
+        const two = expr.substring(i, i + 2)
+        if (['>=', '<=', '==', '!=', '&&', '||'].includes(two)) {
+          tokens.push(two)
+          i += 2
+          continue
+        }
+      }
+
+      // Single-char operators and delimiters
+      if ('+-*/><!?:(),'.includes(expr[i])) {
+        tokens.push(expr[i])
+        i++
+        continue
+      }
+
+      // Identifiers, numbers, and dotted names (e.g., color.red)
+      if (/[a-zA-Z_0-9.]/.test(expr[i])) {
+        let j = i
+        while (j < expr.length && /[a-zA-Z_0-9.]/.test(expr[j])) j++
+        tokens.push(expr.substring(i, j))
+        i = j
+        continue
+      }
+
+      // Unknown char - just add it
+      tokens.push(expr[i])
+      i++
+    }
+    return tokens
+  }
+
+  private transformTernary(tokens: string[], pos: number): { text: string; pos: number } {
+    // Parse or-level expression
+    const left = this.transformOr(tokens, pos)
+
+    if (left.pos < tokens.length && tokens[left.pos] === '?') {
+      const trueExpr = this.transformTernary(tokens, left.pos + 1)
+      if (trueExpr.pos < tokens.length && tokens[trueExpr.pos] === ':') {
+        const falseExpr = this.transformTernary(tokens, trueExpr.pos + 1)
+        return { text: `_tern(${left.text}, ${trueExpr.text}, ${falseExpr.text})`, pos: falseExpr.pos }
+      }
+    }
+
+    return left
+  }
+
+  private transformOr(tokens: string[], pos: number): { text: string; pos: number } {
+    let result = this.transformAnd(tokens, pos)
+
+    while (result.pos < tokens.length && tokens[result.pos] === '||') {
+      const right = this.transformAnd(tokens, result.pos + 1)
+      result = { text: `_or(${result.text}, ${right.text})`, pos: right.pos }
+    }
 
     return result
   }
 
-  private buildDataPoints(candles: Candle[], plots: Map<string, number[]>): IndicatorDataPoint[] {
+  private transformAnd(tokens: string[], pos: number): { text: string; pos: number } {
+    let result = this.transformComparison(tokens, pos)
+
+    while (result.pos < tokens.length && tokens[result.pos] === '&&') {
+      const right = this.transformComparison(tokens, result.pos + 1)
+      result = { text: `_and(${result.text}, ${right.text})`, pos: right.pos }
+    }
+
+    return result
+  }
+
+  private transformComparison(tokens: string[], pos: number): { text: string; pos: number } {
+    let result = this.transformAddSub(tokens, pos)
+
+    const compOps: Record<string, string> = { '>': '_gt', '<': '_lt', '>=': '_gte', '<=': '_lte', '==': '_eq', '!=': '_neq' }
+    while (result.pos < tokens.length && compOps[tokens[result.pos]]) {
+      const op = compOps[tokens[result.pos]]
+      const right = this.transformAddSub(tokens, result.pos + 1)
+      result = { text: `${op}(${result.text}, ${right.text})`, pos: right.pos }
+    }
+
+    return result
+  }
+
+  private transformAddSub(tokens: string[], pos: number): { text: string; pos: number } {
+    let result = this.transformMulDiv(tokens, pos)
+
+    while (result.pos < tokens.length && (tokens[result.pos] === '+' || tokens[result.pos] === '-')) {
+      const op = tokens[result.pos] === '+' ? '_add' : '_sub'
+      const right = this.transformMulDiv(tokens, result.pos + 1)
+      result = { text: `${op}(${result.text}, ${right.text})`, pos: right.pos }
+    }
+
+    return result
+  }
+
+  private transformMulDiv(tokens: string[], pos: number): { text: string; pos: number } {
+    let result = this.transformUnary(tokens, pos)
+
+    while (result.pos < tokens.length && (tokens[result.pos] === '*' || tokens[result.pos] === '/')) {
+      const op = tokens[result.pos] === '*' ? '_mul' : '_div'
+      const right = this.transformUnary(tokens, result.pos + 1)
+      result = { text: `${op}(${result.text}, ${right.text})`, pos: right.pos }
+    }
+
+    return result
+  }
+
+  private transformUnary(tokens: string[], pos: number): { text: string; pos: number } {
+    if (pos < tokens.length && tokens[pos] === '!') {
+      const operand = this.transformUnary(tokens, pos + 1)
+      return { text: `_not(${operand.text})`, pos: operand.pos }
+    }
+    if (pos < tokens.length && tokens[pos] === '-') {
+      // Unary minus
+      const operand = this.transformUnary(tokens, pos + 1)
+      return { text: `_sub(0, ${operand.text})`, pos: operand.pos }
+    }
+    return this.transformPrimary(tokens, pos)
+  }
+
+  private transformPrimary(tokens: string[], pos: number): { text: string; pos: number } {
+    if (pos >= tokens.length) return { text: '', pos }
+
+    const token = tokens[pos]
+
+    // Parenthesized expression
+    if (token === '(') {
+      const inner = this.transformTernary(tokens, pos + 1)
+      if (inner.pos < tokens.length && tokens[inner.pos] === ')') {
+        return { text: `(${inner.text})`, pos: inner.pos + 1 }
+      }
+      return { text: `(${inner.text})`, pos: inner.pos }
+    }
+
+    // Function call: identifier followed by (
+    if (pos + 1 < tokens.length && tokens[pos + 1] === '(' && /^[a-zA-Z_]/.test(token)) {
+      // Collect the full argument list (don't transform inside function calls - they handle their own args)
+      let depth = 1
+      let argStart = pos + 2
+      let current = argStart
+      const args: string[] = []
+
+      while (current < tokens.length && depth > 0) {
+        if (tokens[current] === '(') depth++
+        else if (tokens[current] === ')') {
+          depth--
+          if (depth === 0) {
+            if (current > argStart) {
+              // Transform each argument
+              const argTokens = tokens.slice(argStart, current)
+              const argResult = this.transformTernary(argTokens, 0)
+              args.push(argResult.text)
+            }
+            break
+          }
+        } else if (tokens[current] === ',' && depth === 1) {
+          // Transform this argument
+          const argTokens = tokens.slice(argStart, current)
+          const argResult = this.transformTernary(argTokens, 0)
+          args.push(argResult.text)
+          argStart = current + 1
+        }
+        current++
+      }
+
+      return { text: `${token}(${args.join(', ')})`, pos: current + 1 }
+    }
+
+    // Simple value (identifier, number, string)
+    return { text: token, pos: pos + 1 }
+  }
+
+  private buildDataPoints(candles: Candle[], plots: Map<string, number[]>, plotColors?: Map<string, string[]>): IndicatorDataPoint[] {
     const dataPoints: IndicatorDataPoint[] = []
 
     for (let i = 0; i < candles.length; i++) {
@@ -800,18 +1286,25 @@ export class PineScriptExecutor {
         }
       }
 
-      dataPoints.push({
+      const point: IndicatorDataPoint = {
         timestamp: candles[i].timestamp,
         values,
-      })
-    }
+      }
 
-    // DEBUG: Log data points summary
-    const nonEmpty = dataPoints.filter(dp => Object.keys(dp.values).length > 0)
-    console.log(`[DEBUG buildDataPoints] total=${dataPoints.length}, withValues=${nonEmpty.length}`)
-    if (nonEmpty.length > 0) {
-      console.log(`[DEBUG buildDataPoints] first non-empty:`, JSON.stringify(nonEmpty[0]))
-      console.log(`[DEBUG buildDataPoints] last non-empty:`, JSON.stringify(nonEmpty[nonEmpty.length - 1]))
+      // Include per-bar colors if available
+      if (plotColors && plotColors.size > 0) {
+        const colors: Record<string, string> = {}
+        for (const [plotId, colorSeries] of plotColors.entries()) {
+          if (Array.isArray(colorSeries) && colorSeries[i] != null) {
+            colors[plotId] = String(colorSeries[i])
+          }
+        }
+        if (Object.keys(colors).length > 0) {
+          point.colors = colors
+        }
+      }
+
+      dataPoints.push(point)
     }
 
     return dataPoints

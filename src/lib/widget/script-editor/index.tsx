@@ -38,7 +38,7 @@ export interface ScriptEditorProps {
   onNameChange?: (name: string) => void
 }
 
-const DEFAULT_CODE = `//@version=6
+const DEFAULT_CODE_TWO = `//@version=6
 indicator(title="Stochastic", shorttitle="Stoch", format=format.price, precision=2, timeframe="", timeframe_gaps=true)
 periodK = input.int(14, title="%K Length", minval=1)
 smoothK = input.int(1, title="%K Smoothing", minval=1)
@@ -53,7 +53,7 @@ h1 = hline(20, "Lower Band", color=#787B86)
 fill(h0, h1, color=color.rgb(33, 150, 243, 90), title="Background")
 `
 
-const DEFAULT_CODE_TWO = `//@version=4
+const DEFAULT_CODE = `//@version=4
 // Credits to LazyBear and JustUncleL.. more features added by ZyadaCharts
 
 

@@ -8,6 +8,19 @@ import talib from 'talib'
 export class Indicators {
 
   /**
+   * Validate that source is a numeric array. Returns an empty NaN array if not.
+   * Prevents TA-Lib native segfaults from non-array inputs.
+   */
+  private validateSource(source: unknown, name: string): number[] | null {
+    if (!Array.isArray(source)) {
+      console.error(`${name}: expected array but got ${typeof source}: ${source}`)
+      return null
+    }
+    if (source.length === 0) return null
+    return source as number[]
+  }
+
+  /**
    * Safely execute a TA-Lib function.
    * Replaces NaN values in the input with 0, then restores NaN positions in the output.
    * Returns a NaN-filled array if TA-Lib fails.
@@ -20,6 +33,14 @@ export class Indicators {
       const val = sanitized[key]
       if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'number') {
         sanitized[key] = val.map((v: number) => (isNaN(v) || v === null || v === undefined) ? 0 : v)
+      }
+      // Guard against non-array inputs where arrays are expected (prevents native segfaults)
+      if (key.startsWith('inReal') || key === 'high' || key === 'low' || key === 'close' || key === 'open' || key === 'volume') {
+        if (!Array.isArray(val)) {
+          console.error(`TA-Lib ${params.name}: expected array for '${key}' but got ${typeof val}: ${val}`)
+          const len = (params.endIdx ?? 0) + 1
+          return { begIndex: 0, nbElement: len, result: { outReal: new Array(len).fill(NaN) } }
+        }
       }
     }
 
@@ -41,6 +62,9 @@ export class Indicators {
    * Simple Moving Average
    */
   sma(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'SMA')
+    if (!validated) return []
+    source = validated
     // TA-Lib SMA minimum period is 2; period=1 is identity
     if (length <= 1) return source.slice()
 
@@ -60,6 +84,9 @@ export class Indicators {
    * Exponential Moving Average
    */
   ema(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'EMA')
+    if (!validated) return []
+    source = validated
     // TA-Lib EMA minimum period is 2; period=1 is identity
     if (length <= 1) return source.slice()
 
@@ -79,6 +106,9 @@ export class Indicators {
    * Weighted Moving Average
    */
   wma(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'WMA')
+    if (!validated) return []
+    source = validated
     // TA-Lib WMA minimum period is 2; period=1 is identity
     if (length <= 1) return source.slice()
 
@@ -99,6 +129,9 @@ export class Indicators {
    * TA-Lib doesn't have RMA directly, so we implement it manually
    */
   rma(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'RMA')
+    if (!validated) return []
+    source = validated
     const result: number[] = []
 
     // Start with SMA
@@ -127,6 +160,9 @@ export class Indicators {
    * Relative Strength Index
    */
   rsi(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'RSI')
+    if (!validated) return []
+    source = validated
     const result = this.safeExecute({
       name: 'RSI',
       startIdx: 0,
@@ -148,6 +184,9 @@ export class Indicators {
     slowLength: number,
     signalLength: number
   ): { macd: number[]; signal: number[]; histogram: number[] } {
+    const validated = this.validateSource(source, 'MACD')
+    if (!validated) return { macd: [], signal: [], histogram: [] }
+    source = validated
     const result = this.safeExecute({
       name: 'MACD',
       startIdx: 0,
@@ -175,6 +214,9 @@ export class Indicators {
     length: number,
     mult: number
   ): { upper: number[]; middle: number[]; lower: number[] } {
+    const validated = this.validateSource(source, 'BBANDS')
+    if (!validated) return { upper: [], middle: [], lower: [] }
+    source = validated
     const result = this.safeExecute({
       name: 'BBANDS',
       startIdx: 0,
@@ -240,6 +282,9 @@ export class Indicators {
    * Standard Deviation
    */
   stdev(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'STDDEV')
+    if (!validated) return []
+    source = validated
     const result = this.safeExecute({
       name: 'STDDEV',
       startIdx: 0,
@@ -257,6 +302,9 @@ export class Indicators {
    * Sum of values over length
    */
   sum(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'SUM')
+    if (!validated) return []
+    source = validated
     const result = this.safeExecute({
       name: 'SUM',
       startIdx: 0,
@@ -273,6 +321,9 @@ export class Indicators {
    * Highest value over length
    */
   highest(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'MAX')
+    if (!validated) return []
+    source = validated
     const result = this.safeExecute({
       name: 'MAX',
       startIdx: 0,
@@ -289,6 +340,9 @@ export class Indicators {
    * Lowest value over length
    */
   lowest(source: number[], length: number): number[] {
+    const validated = this.validateSource(source, 'MIN')
+    if (!validated) return []
+    source = validated
     const result = this.safeExecute({
       name: 'MIN',
       startIdx: 0,
@@ -306,6 +360,7 @@ export class Indicators {
    * Not available in TA-Lib, keeping custom implementation
    */
   crossover(a: number[], b: number[]): boolean[] {
+    if (!Array.isArray(a) || !Array.isArray(b)) return []
     const result: boolean[] = [false]
 
     for (let i = 1; i < a.length && i < b.length; i++) {
@@ -320,6 +375,7 @@ export class Indicators {
    * Not available in TA-Lib, keeping custom implementation
    */
   crossunder(a: number[], b: number[]): boolean[] {
+    if (!Array.isArray(a) || !Array.isArray(b)) return []
     const result: boolean[] = [false]
 
     for (let i = 1; i < a.length && i < b.length; i++) {

@@ -158,7 +158,7 @@ function App() {
       )}
 
       {/* Info overlay showing available examples */}
-      {COINRAY_TOKEN && (
+      {/* {COINRAY_TOKEN && (
         <div style={{
           position: 'absolute',
           top: '10px',
@@ -185,7 +185,7 @@ function App() {
             ))}
           </ul>
         </div>
-      )}
+      )} */}
 
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>

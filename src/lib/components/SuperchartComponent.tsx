@@ -454,44 +454,480 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
               const { registerIndicator } = await import('klinecharts')
 
               // Build figures from metadata plots
-              console.log(`[DEBUG chart] metadata.plots:`, JSON.stringify(subscription.metadata.plots))
-              const figures = subscription.metadata.plots
-                .filter((plot) => plot.type === 'plot' || plot.type === 'histogram')
-                .map((plot: any) => ({
-                  key: plot.id,
-                  title: `${plot.title}: `,
-                  type: plot.type === 'histogram' ? 'bar' : 'line',
-                }))
-              console.log(`[DEBUG chart] figures:`, JSON.stringify(figures))
+              console.log('[Script] metadata.plots:', JSON.stringify(subscription.metadata.plots, null, 2))
+              const figures: any[] = []
+              const hlineKeys: { key: string; id: string; price: number }[] = []
+              const fillPlots: { plot1: string; plot2: string; color: string; transp?: number }[] = []
+              const shapePlots: { id: string; style: string; location: string; color: string; size: string; text?: string; textcolor?: string; linewidth?: number }[] = []
+              const gapConnectPlots: { id: string; color: string; linewidth: number }[] = []
 
-              let calcLogged = false
+              for (const plot of subscription.metadata.plots) {
+                switch (plot.type) {
+                  case 'plot': {
+                    const p = plot as any
+                    const plotColor = p.color || '#2196F3'
+                    const plotLinewidth = p.linewidth || 1
+                    if (p.gapConnect) {
+                      // Sparse/conditional plot — register invisible figure, render via draw callback
+                      gapConnectPlots.push({ id: p.id, color: plotColor, linewidth: plotLinewidth })
+                      figures.push({
+                        key: p.id,
+                        title: `${p.title}: `,
+                        type: 'line',
+                        styles: () => ({ color: 'transparent', size: 0 }),
+                      })
+                    } else {
+                      figures.push({
+                        key: p.id,
+                        title: `${p.title}: `,
+                        type: p.style === 'circles' ? 'circle' : 'line',
+                        styles: () => ({
+                          color: plotColor,
+                          size: plotLinewidth,
+                        }),
+                      })
+                    }
+                    break
+                  }
+                  case 'histogram': {
+                    const h = plot as any
+                    figures.push({
+                      key: h.id,
+                      title: `${h.title}: `,
+                      type: 'bar',
+                      baseValue: h.histBase ?? 0,
+                    })
+                    break
+                  }
+                  case 'hline': {
+                    const hl = plot as any
+                    const hlineKey = `hline_${hl.price}`
+                    const hlColor = hl.color || '#888888'
+                    const hlLinestyle = hl.linestyle || 'dashed'
+                    hlineKeys.push({ key: hlineKey, id: hl.id || hlineKey, price: hl.price })
+                    figures.push({
+                      key: hlineKey,
+                      title: `${hl.title || `Level ${hl.price}`}: `,
+                      type: 'line',
+                      styles: () => ({
+                        color: hlColor,
+                        style: hlLinestyle === 'solid' ? 'solid' : 'dashed',
+                        dashedValue: hlLinestyle === 'dotted' ? [2, 2] : [6, 3],
+                        size: hl.linewidth || 1,
+                      }),
+                    })
+                    break
+                  }
+                  case 'plotshape':
+                  case 'plotchar': {
+                    const ps = plot as any
+                    if (ps.id) {
+                      shapePlots.push({
+                        id: ps.id,
+                        style: ps.style || 'xcross',
+                        location: ps.location || 'abovebar',
+                        color: ps.color || '#2196F3',
+                        size: ps.size || 'small',
+                        text: ps.text,
+                        textcolor: ps.textcolor,
+                        linewidth: ps.linewidth,
+                      })
+                      // Still register as a figure so calc produces data for it
+                      figures.push({
+                        key: ps.id,
+                        title: '',
+                        type: 'circle',
+                        styles: () => ({ color: 'transparent' }), // Invisible; draw callback renders it
+                      })
+                    }
+                    break
+                  }
+                  case 'fill': {
+                    const f = plot as any
+                    fillPlots.push({
+                      plot1: f.plot1,
+                      plot2: f.plot2,
+                      color: f.color || 'rgba(33, 150, 243, 0.1)',
+                      transp: f.transp,
+                    })
+                    break
+                  }
+                }
+              }
+
+              // Collect all figure keys for null fallback in calc
+              const allFigureKeys = figures.map((f: any) => f.key)
+              console.log('[Script] allFigureKeys:', allFigureKeys)
+              console.log('[Script] gapConnectPlots:', gapConnectPlots)
+              console.log('[Script] shapePlots:', shapePlots)
+
+              // Build draw callback for custom rendering (fill, shapes, gap-connect lines)
+              const hasFills = fillPlots.length > 0
+              const hasShapes = shapePlots.length > 0
+              const hasGapConnect = gapConnectPlots.length > 0
+              let gcLogCount = 0
+              const drawCallback = (hasFills || hasShapes || hasGapConnect) ? (params: any) => {
+                const { ctx, chart, indicator, bounding, xAxis, yAxis } = params
+                const { realFrom, realTo } = chart.getVisibleRange()
+                const result = indicator.result
+
+                // --- Draw fills ---
+                for (const fill of fillPlots) {
+                  const isHlineFill1 = hlineKeys.find(h => h.id === fill.plot1 || h.key === fill.plot1)
+                  const isHlineFill2 = hlineKeys.find(h => h.id === fill.plot2 || h.key === fill.plot2)
+
+                  // Apply transparency to fill color
+                  let fillColor = fill.color
+                  if (fill.transp !== undefined) {
+                    const alpha = 1 - fill.transp / 100
+                    // If color is already rgba, replace the alpha
+                    if (fillColor.startsWith('rgba')) {
+                      fillColor = fillColor.replace(/,\s*[\d.]+\)$/, `, ${alpha})`)
+                    } else if (fillColor.startsWith('#')) {
+                      const hex = fillColor.replace('#', '')
+                      const r = parseInt(hex.substring(0, 2), 16)
+                      const g = parseInt(hex.substring(2, 4), 16)
+                      const b = parseInt(hex.substring(4, 6), 16)
+                      fillColor = `rgba(${r}, ${g}, ${b}, ${alpha})`
+                    }
+                  }
+
+                  if (isHlineFill1 && isHlineFill2) {
+                    // Fill between two horizontal lines (full width)
+                    const y1 = yAxis.convertToPixel(isHlineFill1.price)
+                    const y2 = yAxis.convertToPixel(isHlineFill2.price)
+                    ctx.fillStyle = fillColor
+                    ctx.fillRect(0, Math.min(y1, y2), bounding.width, Math.abs(y2 - y1))
+                  } else {
+                    // Fill between two plot series
+                    const points1: { x: number; y: number }[] = []
+                    const points2: { x: number; y: number }[] = []
+
+                    for (let i = realFrom; i < realTo; i++) {
+                      const data = result[i]
+                      if (!data) continue
+                      const x = xAxis.convertToPixel(i)
+                      const v1 = isHlineFill1 ? isHlineFill1.price : data[fill.plot1]
+                      const v2 = isHlineFill2 ? isHlineFill2.price : data[fill.plot2]
+                      if (v1 != null && !isNaN(v1)) points1.push({ x, y: yAxis.convertToPixel(v1) })
+                      if (v2 != null && !isNaN(v2)) points2.push({ x, y: yAxis.convertToPixel(v2) })
+                    }
+
+                    if (points1.length > 1 && points2.length > 1) {
+                      ctx.beginPath()
+                      ctx.moveTo(points1[0].x, points1[0].y)
+                      for (let i = 1; i < points1.length; i++) {
+                        ctx.lineTo(points1[i].x, points1[i].y)
+                      }
+                      for (let i = points2.length - 1; i >= 0; i--) {
+                        ctx.lineTo(points2[i].x, points2[i].y)
+                      }
+                      ctx.closePath()
+                      ctx.fillStyle = fillColor
+                      ctx.fill()
+                    }
+                  }
+                }
+
+                // --- Draw shapes ---
+                for (const shape of shapePlots) {
+                  let lastLinePoint: { x: number; y: number } | null = null
+                  for (let i = realFrom; i < realTo; i++) {
+                    const data = result[i]
+                    if (!data) continue
+                    const val = data[shape.id]
+                    if (val == null || isNaN(val)) continue
+
+                    const x = xAxis.convertToPixel(i)
+                    let y: number
+
+                    // Determine y position based on location
+                    const klineData = chart.getDataList()[i]
+                    switch (shape.location) {
+                      case 'absolute':
+                        y = yAxis.convertToPixel(val)
+                        break
+                      case 'abovebar':
+                        y = klineData ? yAxis.convertToPixel(klineData.high) - 10 : 0
+                        break
+                      case 'belowbar':
+                        y = klineData ? yAxis.convertToPixel(klineData.low) + 10 : bounding.height
+                        break
+                      case 'top':
+                        y = 15
+                        break
+                      case 'bottom':
+                        y = bounding.height - 15
+                        break
+                      default:
+                        y = yAxis.convertToPixel(val)
+                    }
+
+                    const sizeMap: Record<string, number> = { tiny: 6, small: 8, normal: 12, large: 16, huge: 20 }
+                    const sz = sizeMap[shape.size] || 8
+
+                    ctx.fillStyle = shape.color
+
+                    // Draw shape based on style
+                    switch (shape.style) {
+                      case 'line': {
+                        // Draw line segment from previous non-NaN point to current
+                        if (lastLinePoint) {
+                          ctx.beginPath()
+                          ctx.moveTo(lastLinePoint.x, lastLinePoint.y)
+                          ctx.lineTo(x, y)
+                          ctx.strokeStyle = shape.color
+                          ctx.lineWidth = shape.linewidth || 2
+                          ctx.stroke()
+                        }
+                        lastLinePoint = { x, y }
+                        break
+                      }
+                      case 'labelup': {
+                        // Label with upward-pointing tip: tip at top, body below
+                        const fontSize = Math.max(Math.round(sz * 1.5), 10)
+                        ctx.font = `bold ${fontSize}px sans-serif`
+                        const lw = shape.text ? ctx.measureText(shape.text).width + 12 : sz * 2.5
+                        const lh = fontSize * 1.6
+                        const tipH = 6
+                        ctx.beginPath()
+                        ctx.moveTo(x, y - lh - tipH)               // tip top (pointing UP)
+                        ctx.lineTo(x + 5, y - lh)                  // right of tip meets body top
+                        ctx.lineTo(x + lw / 2, y - lh)             // body top-right
+                        ctx.lineTo(x + lw / 2, y)                  // body bottom-right
+                        ctx.lineTo(x - lw / 2, y)                  // body bottom-left
+                        ctx.lineTo(x - lw / 2, y - lh)             // body top-left
+                        ctx.lineTo(x - 5, y - lh)                  // left of tip meets body top
+                        ctx.closePath()
+                        ctx.fill()
+                        if (shape.text) {
+                          ctx.fillStyle = shape.textcolor || '#FFFFFF'
+                          ctx.textAlign = 'center'
+                          ctx.textBaseline = 'middle'
+                          ctx.fillText(shape.text, x, y - lh / 2)
+                        }
+                        break
+                      }
+                      case 'labeldown': {
+                        // Label with downward-pointing tip: body above, tip at bottom
+                        const fontSize = Math.max(Math.round(sz * 1.5), 10)
+                        ctx.font = `bold ${fontSize}px sans-serif`
+                        const lw = shape.text ? ctx.measureText(shape.text).width + 12 : sz * 2.5
+                        const lh = fontSize * 1.6
+                        const tipH = 6
+                        ctx.beginPath()
+                        ctx.moveTo(x - lw / 2, y)                  // body top-left
+                        ctx.lineTo(x + lw / 2, y)                  // body top-right
+                        ctx.lineTo(x + lw / 2, y + lh)             // body bottom-right
+                        ctx.lineTo(x + 5, y + lh)                  // right of tip meets body bottom
+                        ctx.lineTo(x, y + lh + tipH)               // tip bottom (pointing DOWN)
+                        ctx.lineTo(x - 5, y + lh)                  // left of tip meets body bottom
+                        ctx.lineTo(x - lw / 2, y + lh)             // body bottom-left
+                        ctx.closePath()
+                        ctx.fill()
+                        if (shape.text) {
+                          ctx.fillStyle = shape.textcolor || '#FFFFFF'
+                          ctx.textAlign = 'center'
+                          ctx.textBaseline = 'middle'
+                          ctx.fillText(shape.text, x, y + lh / 2)
+                        }
+                        break
+                      }
+                      case 'triangleup': {
+                        ctx.beginPath()
+                        ctx.moveTo(x, y - sz * 0.7)
+                        ctx.lineTo(x + sz * 0.5, y + sz * 0.3)
+                        ctx.lineTo(x - sz * 0.5, y + sz * 0.3)
+                        ctx.closePath()
+                        ctx.fill()
+                        break
+                      }
+                      case 'arrowup': {
+                        const asz = sz / 3
+                        ctx.beginPath()
+                        ctx.moveTo(x, y - asz * 0.7)
+                        ctx.lineTo(x + asz * 0.5, y + asz * 0.3)
+                        ctx.lineTo(x - asz * 0.5, y + asz * 0.3)
+                        ctx.closePath()
+                        ctx.fill()
+                        break
+                      }
+                      case 'triangledown': {
+                        ctx.beginPath()
+                        ctx.moveTo(x, y + sz * 0.7)
+                        ctx.lineTo(x - sz * 0.5, y - sz * 0.3)
+                        ctx.lineTo(x + sz * 0.5, y - sz * 0.3)
+                        ctx.closePath()
+                        ctx.fill()
+                        break
+                      }
+                      case 'arrowdown': {
+                        const asz = sz / 3
+                        ctx.beginPath()
+                        ctx.moveTo(x, y + asz * 0.7)
+                        ctx.lineTo(x - asz * 0.5, y - asz * 0.3)
+                        ctx.lineTo(x + asz * 0.5, y - asz * 0.3)
+                        ctx.closePath()
+                        ctx.fill()
+                        break
+                      }
+                      case 'diamond': {
+                        ctx.beginPath()
+                        ctx.moveTo(x, y - sz)
+                        ctx.lineTo(x + sz * 0.7, y)
+                        ctx.lineTo(x, y + sz)
+                        ctx.lineTo(x - sz * 0.7, y)
+                        ctx.closePath()
+                        ctx.fill()
+                        break
+                      }
+                      case 'cross': {
+                        ctx.lineWidth = 2
+                        ctx.strokeStyle = shape.color
+                        ctx.beginPath()
+                        ctx.moveTo(x - sz / 2, y)
+                        ctx.lineTo(x + sz / 2, y)
+                        ctx.moveTo(x, y - sz / 2)
+                        ctx.lineTo(x, y + sz / 2)
+                        ctx.stroke()
+                        break
+                      }
+                      case 'xcross': {
+                        ctx.lineWidth = 2
+                        ctx.strokeStyle = shape.color
+                        ctx.beginPath()
+                        ctx.moveTo(x - sz / 2, y - sz / 2)
+                        ctx.lineTo(x + sz / 2, y + sz / 2)
+                        ctx.moveTo(x + sz / 2, y - sz / 2)
+                        ctx.lineTo(x - sz / 2, y + sz / 2)
+                        ctx.stroke()
+                        break
+                      }
+                      case 'circle':
+                      default: {
+                        ctx.beginPath()
+                        ctx.arc(x, y, sz / 2, 0, Math.PI * 2)
+                        ctx.fill()
+                        break
+                      }
+                    }
+                  }
+                }
+
+                // --- Draw gap-connect lines (sparse/conditional plots like divergence) ---
+                if (gapConnectPlots.length > 0 && gcLogCount < 5) {
+                  gcLogCount++
+                  const dataListDbg = chart.getDataList()
+                  for (const gc of gapConnectPlots) {
+                    let nonNullCount = 0
+                    let colorCount = 0
+                    let transparentCount = 0
+                    let drawnCount = 0
+                    let hasLastPt = false
+                    for (let i = realFrom; i < realTo; i++) {
+                      const d = result[i]
+                      if (d && d[gc.id] != null && !isNaN(d[gc.id])) {
+                        nonNullCount++
+                        const kl = dataListDbg[i]
+                        const sp = kl ? dataStore.get(kl.timestamp) : null
+                        const bc = sp?.colors?.[gc.id]
+                        if (bc) colorCount++
+                        const finalColor = bc || gc.color
+                        const isT = finalColor.endsWith('00') || finalColor.includes(', 0)') || finalColor.includes(',0)')
+                        if (isT) transparentCount++
+                        if (hasLastPt && !isT) drawnCount++
+                        hasLastPt = true
+                      }
+                    }
+                    console.log(`[Script draw] gc "${gc.id}": ${nonNullCount} non-null, ${colorCount} with per-bar color, ${transparentCount} transparent, ${drawnCount} segments to draw, gc.color="${gc.color}"`)
+                  }
+                }
+                const dataList = chart.getDataList()
+                for (const gc of gapConnectPlots) {
+                  let lastPoint: { x: number; y: number } | null = null
+                  for (let i = realFrom; i < realTo; i++) {
+                    const data = result[i]
+                    if (!data) continue // Keep lastPoint — connect across gaps
+                    const val = data[gc.id]
+                    if (val == null || (typeof val === 'number' && isNaN(val))) continue // Keep lastPoint
+
+                    // Get per-bar color from dataStore (if available)
+                    const kline = dataList[i]
+                    const storePoint = kline ? dataStore.get(kline.timestamp) : null
+                    const barColor = storePoint?.colors?.[gc.id] || gc.color
+
+                    // Check if current bar's color is transparent
+                    const isTransparent = barColor.endsWith('00') || barColor.includes(', 0)') || barColor.includes(',0)')
+
+                    const x = xAxis.convertToPixel(i)
+                    const y = yAxis.convertToPixel(val)
+                    // Draw segment only when CURRENT bar's color is non-transparent
+                    // (matching TradingView: destination bar's color controls segment visibility)
+                    if (lastPoint && !isTransparent) {
+                      ctx.beginPath()
+                      ctx.moveTo(lastPoint.x, lastPoint.y)
+                      ctx.lineTo(x, y)
+                      // Make color fully opaque for drawing (transparency only controls visibility)
+                      let opaqueColor = barColor
+                      if (barColor.startsWith('#') && barColor.length === 9) {
+                        // #RRGGBBAA → #RRGGBB (strip alpha, draw at full opacity)
+                        opaqueColor = barColor.substring(0, 7)
+                      } else if (barColor.startsWith('rgba(')) {
+                        // rgba(r, g, b, a) → rgba(r, g, b, 1)
+                        opaqueColor = barColor.replace(/,\s*[\d.]+\)$/, ', 1)')
+                      }
+                      ctx.strokeStyle = opaqueColor
+                      ctx.lineWidth = gc.linewidth
+                      ctx.stroke()
+                    }
+                    // Always track lastPoint through ALL non-null values
+                    // (don't reset on transparent — next visible bar needs to connect back)
+                    lastPoint = { x, y }
+                  }
+                }
+
+                return false // Continue with default figure rendering (plots, hlines)
+              } : null
+
               registerIndicator({
                 name: templateName,
                 shortName: subscription.metadata.shortName,
                 precision: subscription.metadata.precision,
                 figures,
+                draw: drawCallback,
                 calc: (dataList: any[]) => {
-                  const result = dataList.map((kline) => {
+                  let calcGcCount = 0
+                  const mapped = dataList.map((kline: any) => {
                     const point = dataStore.get(kline.timestamp)
-                    if (!point) {
-                      return figures.reduce((acc, fig) => ({ ...acc, [fig.key]: null }), {})
+                    const result: Record<string, number | null> = {}
+
+                    // Initialize all keys to null
+                    for (const key of allFigureKeys) {
+                      result[key] = null
                     }
-                    return point.values
+
+                    // Fill in plot values from data store
+                    if (point?.values) {
+                      for (const [key, value] of Object.entries(point.values)) {
+                        result[key] = value as number
+                      }
+                      // Count gapConnect data points
+                      for (const gc of gapConnectPlots) {
+                        if (point.values[gc.id] !== undefined) calcGcCount++
+                      }
+                    }
+
+                    // Fill in constant hline values (always present)
+                    for (const hl of hlineKeys) {
+                      result[hl.key] = hl.price
+                    }
+
+                    return result
                   })
-                  // DEBUG: Log first call only
-                  if (!calcLogged) {
-                    calcLogged = true
-                    const nonNull = result.filter((r) => figures.some((f) => r[f.key] !== null && r[f.key] !== undefined))
-                    console.log(`[DEBUG chart] calc called: dataList=${dataList.length}, dataStore=${dataStore.size}, results with values=${nonNull.length}`)
-                    if (nonNull.length > 0) {
-                      console.log(`[DEBUG chart] sample calc result:`, JSON.stringify(nonNull[0]))
-                    }
-                    if (dataList.length > 0) {
-                      console.log(`[DEBUG chart] sample kline timestamp:`, dataList[0].timestamp)
-                      console.log(`[DEBUG chart] dataStore has this timestamp:`, dataStore.has(dataList[0].timestamp))
-                    }
+                  if (calcGcCount > 0) {
+                    console.log(`[Script calc] gapConnect data points in calc: ${calcGcCount}, dataStore size: ${dataStore.size}`)
                   }
-                  return result
+                  return mapped
                 },
               })
 
@@ -505,21 +941,38 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
 
               // Wire up data handlers
               subscription.onData((points: any[]) => {
-                console.log(`[DEBUG chart] onData received: points=${Array.isArray(points) ? points.length : typeof points}`)
                 dataStore.clear()
                 if (Array.isArray(points)) {
+                  // Log first few data points and all unique value keys to debug data flow
+                  const allKeys = new Set<string>()
+                  let nonNullSamples: any[] = []
                   for (const point of points) {
                     dataStore.set(point.timestamp, point)
+                    if (point.values) {
+                      for (const k of Object.keys(point.values)) allKeys.add(k)
+                      // Collect samples where gapConnect keys have data
+                      if (nonNullSamples.length < 5) {
+                        for (const gc of gapConnectPlots) {
+                          if (point.values[gc.id] !== undefined) {
+                            nonNullSamples.push({ ts: point.timestamp, key: gc.id, val: point.values[gc.id] })
+                          }
+                        }
+                      }
+                    }
                   }
-                } else {
-                  console.log(`[DEBUG chart] WARNING: points is not an array!`, points)
+                  // Check for per-bar colors
+                  let colorSampleCount = 0
+                  let colorSamples: any[] = []
+                  for (const point of points) {
+                    if (point.colors && colorSampleCount < 3) {
+                      colorSamples.push({ ts: point.timestamp, colors: point.colors })
+                      colorSampleCount++
+                    }
+                  }
+                  console.log('[Script] onData: total points:', points.length, 'all value keys:', [...allKeys])
+                  console.log('[Script] onData: gapConnect samples:', nonNullSamples)
+                  console.log('[Script] onData: color samples:', colorSamples)
                 }
-                console.log(`[DEBUG chart] dataStore size after onData: ${dataStore.size}`)
-                if (dataStore.size > 0) {
-                  const first = dataStore.values().next().value
-                  console.log(`[DEBUG chart] sample dataStore entry:`, JSON.stringify(first))
-                }
-                calcLogged = false // reset so calc logs again after new data
                 chart.overrideIndicator({ name: templateName })
               })
 
