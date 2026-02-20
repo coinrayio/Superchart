@@ -123,6 +123,9 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const [screenshotUrl, setScreenshotUrl] = useState('')
   const [symbolSearchModalVisible, setSymbolSearchModalVisible] = useState(false)
   const [scriptEditorVisible, setScriptEditorVisible] = useState(false)
+  const [readOnlyEditorVisible, setReadOnlyEditorVisible] = useState(false)
+  const [readOnlyEditorCode, setReadOnlyEditorCode] = useState('')
+  const pendingCloneCodeRef = useRef('')
   const [indicatorSettingModalParams, setIndicatorSettingModalParams] = useState<{
     visible: boolean
     indicatorName: string
@@ -205,7 +208,20 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
       }
 
       case 'close': {
-        if (data.paneId === 'candle_pane') {
+        // Backend indicators: remove subscription (klinecharts removal handled in ChartWidget)
+        if (data.indicator.name.startsWith('BACKEND_')) {
+          const active = backendApi?.getActiveIndicatorByKlinechartsName(data.indicator.name)
+          if (active) backendApi?.removeBackendIndicator(active.name).catch(console.error)
+        } else if (data.indicator.name.startsWith('SCRIPT_')) {
+          // Script editor indicators: stop server-side execution + remove from chart
+          const scriptId = data.indicator.name.slice('SCRIPT_'.length)
+          store.scriptProvider()?.stop(scriptId).catch(console.error)
+          chart.removeIndicator({
+            paneId: data.paneId,
+            name: data.indicator.name,
+            id: data.indicator.id,
+          })
+        } else if (data.paneId === 'candle_pane') {
           const newMainIndicators = [...mainIndicators]
           chart.removeIndicator({
             paneId: data.paneId,
@@ -229,8 +245,22 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
         }
         break
       }
+
+      case 'code': {
+        const active = backendApi?.getActiveIndicatorByKlinechartsName(data.indicator.name)
+        if (!active) return
+        const provider = store.indicatorProvider()
+        if (!provider?.getIndicatorCode) return
+        provider.getIndicatorCode(active.name).then((code: string) => {
+          setReadOnlyEditorCode(code)
+          setReadOnlyEditorVisible(true)
+        }).catch((err: Error) => {
+          console.error('[SuperchartComponent] Failed to fetch indicator code:', err)
+        })
+        break
+      }
     }
-  }, [mainIndicators, subIndicators])
+  }, [mainIndicators, subIndicators, backendApi])
 
   // Expose API on mount
   useEffect(() => {
@@ -420,11 +450,28 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
 
       </div>
 
+      {/* Read-only code viewer for server preset indicators */}
+      {readOnlyEditorVisible && (
+        <ScriptEditor
+          locale={locale}
+          initialCode={readOnlyEditorCode}
+          readOnly
+          onClose={() => setReadOnlyEditorVisible(false)}
+          onCloneAndEdit={(code) => {
+            pendingCloneCodeRef.current = code
+            setReadOnlyEditorVisible(false)
+            setReadOnlyEditorCode('')
+            setScriptEditorVisible(true)
+          }}
+        />
+      )}
+
       {/* Script editor modal (overlays from right) */}
       {scriptEditorVisible && scriptProvider && (
         <ScriptEditor
           locale={locale}
-          onClose={() => setScriptEditorVisible(false)}
+          initialCode={pendingCloneCodeRef.current || undefined}
+          onClose={() => { setScriptEditorVisible(false); pendingCloneCodeRef.current = '' }}
           onAddToChart={async (code) => {
             try {
               const symbolInfo = store.symbol()
@@ -978,6 +1025,16 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
 
               subscription.onTick((point: any) => {
                 dataStore.set(point.timestamp, point)
+                chart.overrideIndicator({ name: templateName })
+              })
+
+              subscription.onHistory?.((points: any[]) => {
+                // Merge historical backfill data — do NOT clear existing store
+                if (Array.isArray(points)) {
+                  for (const point of points) {
+                    dataStore.set(point.timestamp, point)
+                  }
+                }
                 chart.overrideIndicator({ name: templateName })
               })
 

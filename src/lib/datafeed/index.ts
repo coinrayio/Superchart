@@ -88,6 +88,13 @@ export interface SuperchartDataLoader extends DataLoader {
     symbolType: string,
     onResult: (results: SearchSymbolResult[]) => void
   ): void
+
+  /**
+   * Register a callback that fires whenever a range of bars is successfully loaded.
+   * fromMs is the start of the loaded range in milliseconds.
+   * Use this to request matching historical indicator data from the script provider.
+   */
+  setOnBarsLoaded(callback: (fromMs: number) => void): void
 }
 
 /**
@@ -127,6 +134,10 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
 
   // Track active subscriptions for cleanup
   const activeSubscriptions = new Map<string, string>() // subscriberUID -> ticker
+
+  // Callback invoked after each successful bar load (used to trigger indicator history loading).
+  // Wrapped in an object so TypeScript doesn't narrow it away inside async closures.
+  const barsLoadedRef: { callback: ((fromMs: number) => void) | null } = { callback: null }
 
   // Initialize datafeed configuration
   datafeed.onReady(() => {
@@ -229,6 +240,12 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
             // Backward: always allow loading older data if available
             // Forward: never allow loading future data (historical charts only)
             callback(klineData, { backward: false, forward: hasMore })
+
+            // Notify indicator providers so they can fetch matching historical data
+            if (bars.length > 0 && barsLoadedRef.callback) {
+              barsLoadedRef.callback(fromMs)
+            }
+
             store.setLoadingVisible(false)
           },
           (error) => {
@@ -275,6 +292,10 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
 
     searchSymbols: (userInput, exchange, symbolType, onResult) => {
       datafeed.searchSymbols(userInput, exchange, symbolType, onResult)
+    },
+
+    setOnBarsLoaded(cb: (fromMs: number) => void) {
+      barsLoadedRef.callback = cb
     },
   }
 

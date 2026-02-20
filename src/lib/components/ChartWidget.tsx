@@ -137,8 +137,17 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
       []
     )
 
+    // Keep a ref to the external handler so the subscribeAction callback never goes stale
+    const onIndicatorTooltipFeatureClickRef = useRef(onIndicatorTooltipFeatureClick)
+    useEffect(() => {
+      onIndicatorTooltipFeatureClickRef.current = onIndicatorTooltipFeatureClick
+    }, [onIndicatorTooltipFeatureClick])
+
     /**
-     * Handle indicator tooltip feature click
+     * Handle indicator tooltip feature click.
+     * Defined with no deps so the same function reference is registered with
+     * subscribeAction for the lifetime of the chart — the ref above ensures we
+     * always call the latest external handler without stale-closure bugs.
      */
     const handleIndicatorTooltipFeatureClick = useCallback(
       (data: unknown) => {
@@ -150,8 +159,8 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
 
         const chart = store.instanceApi()
 
-        // Call external handler if provided
-        onIndicatorTooltipFeatureClick?.({ paneId, feature, indicator })
+        // Call external handler if provided (always reads latest via ref)
+        onIndicatorTooltipFeatureClickRef.current?.({ paneId, feature, indicator })
 
         // Handle built-in features
         switch (feature.id) {
@@ -183,7 +192,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
             break
         }
       },
-      [onIndicatorTooltipFeatureClick]
+      [] // stable — reads external handler via ref
     )
 
     /**
@@ -326,6 +335,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
               createTooltipFeature('invisible', '\ue901', color),
               createTooltipFeature('setting', '\ue902', color),
               createTooltipFeature('close', '\ue900', color),
+              createTooltipFeature('code', '{}', color, 'monospace'),
             ],
           },
         },
@@ -397,7 +407,8 @@ ChartWidget.displayName = 'ChartWidget'
 function createTooltipFeature(
   id: string,
   code: string,
-  color: string
+  color: string,
+  family = 'icomoon'
 ): TooltipFeatureStyle {
   return {
     id,
@@ -413,7 +424,7 @@ function createTooltipFeature(
     type: 'icon_font',
     content: {
       code,
-      family: 'icomoon',
+      family,
     },
     size: 14,
     color,

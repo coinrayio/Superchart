@@ -169,6 +169,8 @@ export interface UseBackendIndicatorsReturn {
   updateBackendSettings: (indicatorName: string, settings: Record<string, SettingValue>) => Promise<void>
   /** Get the active indicator by name (for settings modal) */
   getActiveIndicator: (name: string) => ActiveIndicator | undefined
+  /** Reverse-lookup: find active indicator by klinecharts template name (e.g. "BACKEND_<id>") */
+  getActiveIndicatorByKlinechartsName: (klineName: string) => ActiveIndicator | undefined
   /** Called when symbol/period changes */
   handleSymbolPeriodChange: () => Promise<void>
   /** Restore backend indicators from saved state */
@@ -304,6 +306,22 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
       maxValue: subscription.metadata.maxValue ?? undefined,
       figures,
       calc,
+      createTooltipDataSource: (param) => {
+        const features = param.chart.getStyles().indicator.tooltip.features
+        // features[0]=visible, [1]=invisible, [2]=setting, [3]=close, [4]=code
+        // Guard: filter out undefined in case setStyles hasn't applied all 5 features yet
+        return {
+          name,
+          calcParamsText: subscription.metadata.shortName,
+          features: [
+            param.indicator.visible ? features[1] : features[0],
+            features[4],   // code '{}' — may be undefined on first render, filtered below
+            features[2],   // setting
+            features[3],   // close
+          ].filter(Boolean),
+          legends: [],
+        }
+      },
     })
 
     // Create the indicator on the chart
@@ -357,6 +375,18 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
       }
 
       // Force recalc
+      chart.overrideIndicator({ name })
+    })
+
+    subscription.onHistory?.((points: IndicatorDataPoint[]) => {
+      // Merge historical backfill data — do NOT clear existing store
+      for (const point of points) {
+        dataStore.set(point.timestamp, point)
+        if (!active.timestamps.includes(point.timestamp)) {
+          active.timestamps.push(point.timestamp)
+        }
+      }
+      active.timestamps.sort((a, b) => a - b)
       chart.overrideIndicator({ name })
     })
 
@@ -417,6 +447,17 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
    */
   const getActiveIndicator = useCallback((name: string): ActiveIndicator | undefined => {
     return activeRef.current.get(name)
+  }, [])
+
+  /**
+   * Reverse-lookup: find an active indicator by its klinecharts template name ("BACKEND_<id>")
+   */
+  const getActiveIndicatorByKlinechartsName = useCallback((klineName: string): ActiveIndicator | undefined => {
+    const indicatorId = klineName.startsWith(BACKEND_PREFIX) ? klineName.slice(BACKEND_PREFIX.length) : klineName
+    for (const active of activeRef.current.values()) {
+      if (active.indicatorId === indicatorId) return active
+    }
+    return undefined
   }, [])
 
   /**
@@ -540,6 +581,7 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     removeBackendIndicator,
     updateBackendSettings,
     getActiveIndicator,
+    getActiveIndicatorByKlinechartsName,
     handleSymbolPeriodChange,
     restoreBackendIndicators,
     disposeAll,
@@ -550,6 +592,7 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     removeBackendIndicator,
     updateBackendSettings,
     getActiveIndicator,
+    getActiveIndicatorByKlinechartsName,
     handleSymbolPeriodChange,
     restoreBackendIndicators,
     disposeAll,
