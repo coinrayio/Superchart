@@ -29,6 +29,54 @@ import type { UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { PaneProperties } from '../store/chartStore'
 import * as store from '../store/chartStore'
 
+// ---- Toolbar types ----
+
+export interface ToolbarButtonOptions {
+  /** Where to place the button. 'left' = after period selector; 'right' = before fullscreen. Default: 'right' */
+  align?: 'left' | 'right'
+  /** SVG markup or HTML string rendered as the button icon */
+  icon?: string
+  /** Text label shown next to the icon */
+  text?: string
+  /** Tooltip shown on hover */
+  tooltip?: string
+  /** Called when the button is clicked */
+  onClick?: () => void
+}
+
+/** A regular clickable item in a toolbar dropdown */
+export interface ToolbarDropdownActionItem {
+  type?: 'item'
+  /** Display label */
+  text: string
+  /** SVG markup or HTML string rendered before the label */
+  icon?: string
+  /** Called when the item is clicked */
+  onClick: () => void
+}
+
+/** A visual separator line in a toolbar dropdown */
+export interface ToolbarDropdownSeparator {
+  type: 'separator'
+}
+
+export type ToolbarDropdownItem = ToolbarDropdownActionItem | ToolbarDropdownSeparator
+
+export interface ToolbarDropdownOptions {
+  /** Where to place the dropdown trigger. Default: 'right' */
+  align?: 'left' | 'right'
+  /** SVG markup or HTML string rendered as the trigger icon */
+  icon?: string
+  /** Text label shown on the trigger button */
+  text?: string
+  /** Tooltip shown on hover */
+  tooltip?: string
+  /** Items rendered inside the dropdown list */
+  items: ToolbarDropdownItem[]
+}
+
+// ---- Main option types ----
+
 export interface SuperchartOptions {
   /** Container element or ID */
   container: string | HTMLElement
@@ -128,6 +176,16 @@ export interface SuperchartApi {
   openScriptEditor: (options?: { initialCode?: string; readOnly?: boolean }) => void
   /** Programmatically close the script editor panel */
   closeScriptEditor: () => void
+  /**
+   * Add a custom button to the period bar toolbar.
+   * Returns the created HTMLButtonElement — set innerHTML, add event listeners, or apply classes freely.
+   */
+  createButton: (options?: ToolbarButtonOptions) => HTMLElement
+  /**
+   * Add a custom dropdown to the period bar toolbar.
+   * Returns the trigger HTMLElement. The dropdown list is managed internally (pure DOM, no React).
+   */
+  createDropdown: (options: ToolbarDropdownOptions) => HTMLElement
   /** Dispose the chart */
   dispose: () => void
 }
@@ -310,6 +368,14 @@ export default class Superchart implements SuperchartApi {
 
   closeScriptEditor(): void {
     this._api?.closeScriptEditor()
+  }
+
+  createButton(options?: ToolbarButtonOptions): HTMLElement {
+    return this._api?.createButton(options) ?? document.createElement('button')
+  }
+
+  createDropdown(options: ToolbarDropdownOptions): HTMLElement {
+    return this._api?.createDropdown(options) ?? document.createElement('div')
   }
 
   /**

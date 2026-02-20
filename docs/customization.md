@@ -232,6 +232,103 @@ const chart = new Superchart({
 
 ---
 
+## Period Bar API
+
+The period bar toolbar is extensible with custom buttons and dropdowns. Items are plain `HTMLElement`s — you can set `innerHTML`, add event listeners, or apply classes freely without touching React.
+
+### `chart.createButton(options?)`
+
+Adds a button to the toolbar and returns the `HTMLElement`. The element is pre-styled to match the built-in toolbar buttons.
+
+```typescript
+// Simple click handler
+const alertBtn = chart.createButton({
+  text: 'Alert',
+  tooltip: 'Set price alert',
+  onClick: () => openAlertDialog(),
+})
+
+// SVG icon (no text label)
+const refreshBtn = chart.createButton({
+  icon: '<svg viewBox="0 0 20 20" width="16" height="16"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z" fill="currentColor"/></svg>',
+  tooltip: 'Refresh data',
+  onClick: () => reloadData(),
+})
+
+// Place on the left side (after period selector)
+const leftBtn = chart.createButton({
+  align: 'left',
+  text: 'Draw',
+  onClick: () => activateDrawingMode(),
+})
+
+// Returned element can be customised further
+const btn = chart.createButton({ text: 'Custom' })
+btn.style.color = '#F5A623'
+btn.setAttribute('data-testid', 'my-button')
+```
+
+**Options:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `align` | `'left' \| 'right'` | `'right'` | `'left'` = after period selector; `'right'` = before fullscreen |
+| `text` | `string` | — | Visible text label |
+| `icon` | `string` | — | SVG markup or HTML rendered before the label |
+| `tooltip` | `string` | — | Native tooltip on hover |
+| `onClick` | `() => void` | — | Click handler |
+
+---
+
+### `chart.createDropdown(options)`
+
+Adds a dropdown trigger button to the toolbar and returns the trigger `HTMLElement`. The dropdown list is a self-contained pure-DOM widget — no React required.
+
+```typescript
+chart.createDropdown({
+  text: 'Chart Type',
+  tooltip: 'Change chart style',
+  items: [
+    {
+      text: 'Candlestick',
+      icon: '<svg>...</svg>',
+      onClick: () => chart.getChart()?.setStyles({ candle: { type: 'candle_solid' } }),
+    },
+    {
+      text: 'Line',
+      onClick: () => chart.getChart()?.setStyles({ candle: { type: 'area' } }),
+    },
+    { type: 'separator' },
+    {
+      text: 'Heikin-Ashi',
+      onClick: () => chart.getChart()?.setStyles({ candle: { type: 'candle_solid' } }),
+    },
+  ],
+})
+```
+
+**Options:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `align` | `'left' \| 'right'` | `'right'` | Same as `createButton` |
+| `text` | `string` | — | Text label on the trigger |
+| `icon` | `string` | — | SVG/HTML icon on the trigger |
+| `tooltip` | `string` | — | Native tooltip |
+| `items` | `ToolbarDropdownItem[]` | required | List of items or separators |
+
+**`ToolbarDropdownItem`** is a union:
+
+```typescript
+// Regular clickable item
+{ type?: 'item'; text: string; icon?: string; onClick: () => void }
+
+// Visual separator line
+{ type: 'separator' }
+```
+
+---
+
 ## CSS Classes
 
 Target Superchart DOM elements for custom styling:

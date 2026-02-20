@@ -147,6 +147,14 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   // Widget default styles for reset
   const [widgetDefaultStyles, setWidgetDefaultStyles] = useState<Styles>()
 
+  // Custom toolbar container refs (populated after PeriodBar mounts)
+  const toolbarLeftRef = useRef<HTMLElement | null>(null)
+  const toolbarRightRef = useRef<HTMLElement | null>(null)
+  const handleToolbarReady = useCallback((left: HTMLElement, right: HTMLElement) => {
+    toolbarLeftRef.current = left
+    toolbarRightRef.current = right
+  }, [])
+
   // Backend indicator API (received from ChartWidget)
   const [backendApi, setBackendApi] = useState<UseBackendIndicatorsReturn | null>(null)
   const handleBackendIndicatorsReady = useCallback((api: UseBackendIndicatorsReturn) => {
@@ -324,6 +332,106 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
         setReadOnlyEditorVisible(false)
         pendingCloneCodeRef.current = ''
       },
+      createButton: (options) => {
+        const container = options?.align === 'left'
+          ? toolbarLeftRef.current
+          : toolbarRightRef.current
+        const btn = document.createElement('button')
+        btn.className = 'superchart-toolbar-btn'
+        if (options?.icon) {
+          const iconSpan = document.createElement('span')
+          iconSpan.innerHTML = options.icon
+          btn.appendChild(iconSpan)
+        }
+        if (options?.text) {
+          const textSpan = document.createElement('span')
+          textSpan.textContent = options.text
+          btn.appendChild(textSpan)
+        }
+        if (options?.tooltip) btn.title = options.tooltip
+        if (options?.onClick) btn.addEventListener('click', options.onClick)
+        container?.appendChild(btn)
+        return btn
+      },
+      createDropdown: (options) => {
+        const container = options?.align === 'left'
+          ? toolbarLeftRef.current
+          : toolbarRightRef.current
+
+        const trigger = document.createElement('div')
+        trigger.className = 'superchart-toolbar-btn'
+        trigger.style.cursor = 'pointer'
+        if (options?.icon) {
+          const iconSpan = document.createElement('span')
+          iconSpan.innerHTML = options.icon
+          trigger.appendChild(iconSpan)
+        }
+        if (options?.text) {
+          const textSpan = document.createElement('span')
+          textSpan.textContent = options.text
+          trigger.appendChild(textSpan)
+        }
+        const chevron = document.createElement('span')
+        chevron.className = 'superchart-toolbar-dropdown-chevron'
+        chevron.textContent = '▾'
+        trigger.appendChild(chevron)
+        if (options?.tooltip) trigger.title = options.tooltip
+
+        let dropdownEl: HTMLElement | null = null
+
+        const close = () => {
+          dropdownEl?.remove()
+          dropdownEl = null
+          document.removeEventListener('mousedown', onOutside)
+        }
+
+        const onOutside = (e: MouseEvent) => {
+          if (!dropdownEl?.contains(e.target as Node) && !trigger.contains(e.target as Node)) {
+            close()
+          }
+        }
+
+        trigger.addEventListener('click', () => {
+          if (dropdownEl) { close(); return }
+
+          dropdownEl = document.createElement('div')
+          dropdownEl.className = 'superchart-toolbar-dropdown-list'
+
+          const rect = trigger.getBoundingClientRect()
+          dropdownEl.style.top = `${rect.bottom + 2}px`
+          dropdownEl.style.left = `${rect.left}px`
+
+          for (const item of options.items) {
+            if (item.type === 'separator') {
+              const sep = document.createElement('div')
+              sep.className = 'superchart-toolbar-dropdown-separator'
+              dropdownEl.appendChild(sep)
+            } else {
+              const itemEl = document.createElement('div')
+              itemEl.className = 'superchart-toolbar-dropdown-item'
+              if (item.icon) {
+                const iconSpan = document.createElement('span')
+                iconSpan.innerHTML = item.icon
+                iconSpan.style.marginRight = '8px'
+                iconSpan.style.display = 'inline-flex'
+                iconSpan.style.alignItems = 'center'
+                itemEl.appendChild(iconSpan)
+              }
+              const label = document.createElement('span')
+              label.textContent = item.text
+              itemEl.appendChild(label)
+              itemEl.addEventListener('click', () => { close(); item.onClick() })
+              dropdownEl.appendChild(itemEl)
+            }
+          }
+
+          document.body.appendChild(dropdownEl)
+          document.addEventListener('mousedown', onOutside)
+        })
+
+        container?.appendChild(trigger)
+        return trigger
+      },
       dispose: () => {},
     }
 
@@ -382,6 +490,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
             setScreenshotUrl(url)
           }
         }}
+        onToolbarReady={handleToolbarReady}
         />
       )}
 

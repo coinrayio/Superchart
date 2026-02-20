@@ -26,7 +26,15 @@ export type { SuperchartDataLoader } from './datafeed'
 export { DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
 
 // Types - only export what consumers need
-export type { SuperchartOptions, SuperchartApi } from './components/Superchart'
+export type {
+  SuperchartOptions,
+  SuperchartApi,
+  ToolbarButtonOptions,
+  ToolbarDropdownOptions,
+  ToolbarDropdownItem,
+  ToolbarDropdownActionItem,
+  ToolbarDropdownSeparator,
+} from './components/Superchart'
 export type { Period, SymbolInfo, ProChart } from './types/chart'
 export type { StorageAdapter, ChartState } from './types/storage'
 export type { IndicatorProvider, IndicatorDefinition } from './types/indicator'
