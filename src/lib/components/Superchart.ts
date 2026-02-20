@@ -119,6 +119,15 @@ export interface SuperchartApi {
   setOverlayMode: (mode: OverlayMode) => void
   /** Get the backend indicators API (null if no IndicatorProvider configured) */
   getBackendIndicators: () => UseBackendIndicatorsReturn | null
+  /**
+   * Programmatically open the script editor panel.
+   * Only functional when a scriptProvider was configured.
+   * @param options.initialCode - Pre-fill the editor with this code
+   * @param options.readOnly - Open in read-only view mode (for inspecting server preset code)
+   */
+  openScriptEditor: (options?: { initialCode?: string; readOnly?: boolean }) => void
+  /** Programmatically close the script editor panel */
+  closeScriptEditor: () => void
   /** Dispose the chart */
   dispose: () => void
 }
@@ -293,6 +302,14 @@ export default class Superchart implements SuperchartApi {
 
   getBackendIndicators(): UseBackendIndicatorsReturn | null {
     return this._api?.getBackendIndicators() ?? null
+  }
+
+  openScriptEditor(options?: { initialCode?: string; readOnly?: boolean }): void {
+    this._api?.openScriptEditor(options)
+  }
+
+  closeScriptEditor(): void {
+    this._api?.closeScriptEditor()
   }
 
   /**

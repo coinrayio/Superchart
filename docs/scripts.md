@@ -1,6 +1,6 @@
 # Script Execution (Pine Script)
 
-The `ScriptProvider` interface connects Superchart to a backend that can compile and execute trading scripts. When provided, a script editor button appears in the period bar toolbar. The built-in `ScriptEditor` component is also exportable for standalone use.
+The `ScriptProvider` interface connects Superchart to a backend that can compile and execute trading scripts. When provided, a script editor button appears in the period bar toolbar and the editor can also be opened programmatically via `chart.openScriptEditor()`.
 
 Scripts executed via `ScriptProvider` return an `IndicatorSubscription` — the same type used by `IndicatorProvider`. This means compiled scripts flow through the exact same calc-bridge rendering pipeline as backend indicators.
 
@@ -153,7 +153,7 @@ export interface ScriptSaveParams {
 
 ## ScriptLanguageDefinition
 
-Defines the language used by the script editor for syntax highlighting, keyword completion, and autocomplete. The default (`defaultScriptLanguage`) defines Pine Script v4/v5/v6 with 100+ built-in functions and variables.
+Defines the language used by the script editor for syntax highlighting, keyword completion, and autocomplete. Superchart ships with Pine Script v4/v5/v6 support as the built-in default (100+ functions and variables). You can pass a custom definition to `ScriptProvider` if your backend supports a different language.
 
 ```typescript
 export interface ScriptLanguageDefinition {
@@ -209,82 +209,45 @@ export interface ScriptBuiltinVariable {
 
 ---
 
-## ScriptEditor Component
+## Script Editor API
 
-The `ScriptEditor` is a standalone React component. It is used internally by Superchart when a `scriptProvider` is configured, but you can also render it yourself.
+The script editor is opened and closed via the `Superchart` class API — no React required.
+
+### `openScriptEditor(options?)`
+
+Opens the script editor panel. Only functional when a `scriptProvider` was configured.
 
 ```typescript
-export interface ScriptEditorProps {
-  /** Locale for UI labels (default: 'en-US') */
-  locale?: string
+// Open with an empty editor (uses the default EMA hello-world placeholder)
+chart.openScriptEditor()
 
-  /**
-   * Declarative language definition.
-   * Defaults to defaultScriptLanguage (Pine Script).
-   * Ignored when editorExtensions is provided.
-   */
-  language?: ScriptLanguageDefinition
+// Open with pre-filled code
+chart.openScriptEditor({ initialCode: '//@version=5\nindicator("My Script")' })
 
-  /**
-   * Raw CodeMirror 6 extensions.
-   * Use this to supply a fully custom language pack.
-   * When provided, the language prop is ignored.
-   */
-  editorExtensions?: unknown[]
-
-  /** Initial source code shown in the editor */
-  initialCode?: string
-
-  /** Script name shown in the toolbar dropdown (default: 'Untitled script') */
-  scriptName?: string
-
-  /** When true, the primary button changes from 'Add to chart' to 'Update on chart' */
-  isOnChart?: boolean
-
-  /** Compilation diagnostics to display as inline error markers */
-  diagnostics?: ScriptDiagnostic[]
-
-  /** Called when the user clicks the X (close) button */
-  onClose?: () => void
-
-  /**
-   * Called when the user clicks 'Add to chart' or 'Update on chart'.
-   * Receives the current code string.
-   */
-  onAddToChart?: (code: string) => void
-
-  /** Called when the user clicks 'Save'. Receives code and script name. */
-  onSave?: (code: string, name: string) => void
-
-  /** Called on every code change (debounced by CodeMirror). */
-  onChange?: (code: string) => void
-
-  /** Called when the user renames the script */
-  onNameChange?: (name: string) => void
-
-  /**
-   * When true, the editor is non-editable and shows a 'Clone & Edit' button
-   * instead of 'Add to chart'. Used for viewing server preset indicator code.
-   */
-  readOnly?: boolean
-
-  /**
-   * Called when the user clicks 'Clone & Edit' in read-only mode.
-   * Receives the code to pre-fill the new editable editor.
-   */
-  onCloneAndEdit?: (code: string) => void
-}
+// Open in read-only view mode (e.g. to inspect a server preset)
+chart.openScriptEditor({
+  initialCode: serverCode,
+  readOnly: true,
+})
 ```
 
-### Read-Only Viewer and Clone Flow
+In read-only mode:
+- The editor is non-editable.
+- A "Clone & Edit" button appears. Clicking it reopens the editor in write mode with the same code pre-filled, ready for the user to customise.
 
-When `readOnly={true}`:
-- The editor is non-editable (CodeMirror `readOnly` extension applied).
-- A banner reads "View only — click Clone & Edit to make your own copy".
-- The primary toolbar button is "Clone & Edit" instead of "Add to chart".
-- Clicking "Clone & Edit" calls `onCloneAndEdit(code)` and internally sets `readOnly = false`, allowing the user to edit the forked copy.
+### `closeScriptEditor()`
 
-Superchart uses this flow when `IndicatorProvider.getIndicatorCode` is configured: clicking the code icon on an indicator tooltip opens a read-only viewer showing the backend Pine Script source. The user can clone it to their own script editor.
+Closes the script editor panel (both normal and read-only modes).
+
+```typescript
+chart.closeScriptEditor()
+```
+
+---
+
+### Read-Only Code Viewer for Server Presets
+
+When `IndicatorProvider.getIndicatorCode` is configured, clicking the `{}` code icon on any backend indicator tooltip automatically opens the read-only viewer with the server's Pine Script source. This is handled internally by Superchart — no additional wiring required.
 
 ---
 
@@ -332,41 +295,3 @@ const chart = new Superchart({
 })
 ```
 
----
-
-## Using ScriptEditor Standalone
-
-You can render `ScriptEditor` outside of a `Superchart` instance — for example, in a dedicated "Pine Script editor" page:
-
-```typescript
-import { ScriptEditor, defaultScriptLanguage } from 'superchart'
-
-function EditorPage() {
-  const handleAddToChart = async (code: string) => {
-    const result = await scriptProvider.compile(code, 'pine')
-    if (!result.success) {
-      // diagnostics are shown automatically when passed as prop
-      return
-    }
-    const subscription = await scriptProvider.executeAsIndicator({
-      code,
-      language: 'pine',
-      symbol: currentSymbol,
-      period: currentPeriod,
-    })
-    // Wire subscription to your indicator pipeline...
-  }
-
-  return (
-    <ScriptEditor
-      locale="en-US"
-      language={defaultScriptLanguage}
-      onClose={() => router.back()}
-      onAddToChart={handleAddToChart}
-      onSave={async (code, name) => {
-        await scriptProvider.saveScript({ name, code, language: 'pine' })
-      }}
-    />
-  )
-}
-```

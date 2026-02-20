@@ -310,6 +310,20 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
       createOverlay: (overlay, paneId) => pushOverlay(overlay, paneId),
       setOverlayMode: (mode) => store.instanceApi()?.overrideOverlay({ mode }),
       getBackendIndicators: () => backendApi,
+      openScriptEditor: (options) => {
+        if (options?.readOnly) {
+          setReadOnlyEditorCode(options.initialCode ?? '')
+          setReadOnlyEditorVisible(true)
+        } else {
+          pendingCloneCodeRef.current = options?.initialCode ?? ''
+          setScriptEditorVisible(true)
+        }
+      },
+      closeScriptEditor: () => {
+        setScriptEditorVisible(false)
+        setReadOnlyEditorVisible(false)
+        pendingCloneCodeRef.current = ''
+      },
       dispose: () => {},
     }
 

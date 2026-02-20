@@ -232,67 +232,6 @@ const chart = new Superchart({
 
 ---
 
-## Custom Toolbar
-
-Pass a `toolbar` ReactNode to inject custom controls into the period bar toolbar.
-
-```typescript
-import Superchart from 'superchart'
-import React from 'react'
-
-const MyButton = () => (
-  <button onClick={() => alert('Custom action!')}>
-    My Tool
-  </button>
-)
-
-const chart = new Superchart({
-  toolbar: React.createElement(MyButton),
-  // ...
-})
-```
-
-The custom toolbar is inserted to the right of the built-in period selector and indicator button. Use CSS to match the button styles of the surrounding toolbar.
-
----
-
-## Custom Loading Component
-
-Replace the default loading spinner with a custom element:
-
-```typescript
-import React from 'react'
-
-const chart = new Superchart({
-  loadingComponent: React.createElement(
-    'div',
-    { className: 'my-loader', style: { color: '#fff' } },
-    'Loading chart data...'
-  ),
-  // ...
-})
-```
-
----
-
-## Custom Drawing Bar
-
-Replace the entire drawing toolbar with a custom React component:
-
-```typescript
-import React from 'react'
-import { MyCustomDrawingBar } from './MyCustomDrawingBar'
-
-const chart = new Superchart({
-  drawingBar: React.createElement(MyCustomDrawingBar),
-  // ...
-})
-```
-
-Your custom drawing bar receives no automatic props. Call `chart.createOverlay()` and `chart.setOverlayMode()` to interact with the chart.
-
----
-
 ## CSS Classes
 
 Target Superchart DOM elements for custom styling:
@@ -323,7 +262,7 @@ Example — custom font for the period bar:
 }
 ```
 
-Superchart renders into a React root mounted inside `container`. The root element has `class="superchart"` applied, so all CSS selectors above can be scoped under your container if needed:
+Superchart mounts inside `container` and adds `class="superchart"` to the root element, so all CSS selectors above can be scoped under your container if needed:
 
 ```css
 #my-chart-container .superchart-period-bar { ... }

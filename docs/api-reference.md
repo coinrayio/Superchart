@@ -135,6 +135,19 @@ export interface SuperchartApi {
    */
   getBackendIndicators(): UseBackendIndicatorsReturn | null
 
+  // ---- Script Editor ----
+
+  /**
+   * Programmatically open the script editor panel.
+   * Only functional when a scriptProvider was configured.
+   * @param options.initialCode - Pre-fill the editor with this code.
+   * @param options.readOnly    - Open in read-only view mode (inspect server preset code).
+   */
+  openScriptEditor(options?: { initialCode?: string; readOnly?: boolean }): void
+
+  /** Programmatically close the script editor panel (both normal and read-only modes). */
+  closeScriptEditor(): void
+
   // ---- Utilities ----
 
   /** Trigger a canvas resize (call after the container changes size). */
@@ -169,7 +182,7 @@ export interface SuperchartApi {
 
   // ---- Lifecycle ----
 
-  /** Unmount the React tree, remove klinecharts canvas, reset all state. */
+  /** Unmount the chart, remove the klinecharts canvas, and reset all state. */
   dispose(): void
 }
 ```
@@ -392,23 +405,6 @@ function periodToResolution(period: BasePeriod): string
 ```
 
 Inverse of `resolutionToPeriod`. Converts a `Period` to a TradingView resolution string.
-
-### ScriptEditor
-
-```typescript
-// React component
-export function ScriptEditor(props: ScriptEditorProps): JSX.Element
-```
-
-A standalone TradingView-style code editor modal. Can be used independently of a `Superchart` instance. Requires React and optionally CodeMirror. See [scripts.md](./scripts.md) for the full `ScriptEditorProps` interface.
-
-### defaultScriptLanguage
-
-```typescript
-export const defaultScriptLanguage: ScriptLanguageDefinition
-```
-
-The built-in Pine Script language definition used by `ScriptEditor`. Contains keywords, built-in functions, built-in variables, operator and comment syntax. Pass a custom `ScriptLanguageDefinition` to the `language` prop to override.
 
 ---
 

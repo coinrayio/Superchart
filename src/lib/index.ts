@@ -22,10 +22,6 @@ export { createOrderLine } from 'klinecharts'
 export { createDataLoader } from './datafeed'
 export type { SuperchartDataLoader } from './datafeed'
 
-// Script editor widget
-export { ScriptEditor } from './widget/script-editor'
-export { defaultScriptLanguage } from './widget/script-editor/defaultLanguage'
-
 // Order line default styles (from coinray-chart)
 export { DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
 
@@ -66,4 +62,4 @@ export type {
   ScriptInfo,
   ScriptSaveParams,
 } from './types/script'
-export type { ScriptEditorProps } from './widget/script-editor'
+
