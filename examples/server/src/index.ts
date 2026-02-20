@@ -188,8 +188,10 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
     // in-flight Coinray callbacks that arrive after unsubscription are ignored.
     let stopped = false
 
-    // Subscribe to real-time updates
-    const subscriptionKey = await coinrayClient.subscribeKlines(
+    // Subscribe to real-time updates.
+    // subscribeKlines now fans out from a single Coinray stream per ticker+resolution,
+    // so multiple indicators on the same symbol/period share one WebSocket connection.
+    const handlerId = await coinrayClient.subscribeKlines(
       message.symbol,
       message.period,
       (newCandle: Candle) => {
@@ -240,7 +242,8 @@ async function handleExecute(ws: WebSocket, message: ExecuteRequest) {
       settings: message.settings ?? {},
       unsubscribe: () => {
         stopped = true
-        return coinrayClient.unsubscribe(subscriptionKey)
+        // removeTickHandler only closes the Coinray stream when this was the last handler
+        return coinrayClient.removeTickHandler(handlerId)
       },
       candles,
     })

@@ -275,6 +275,11 @@ export function ScriptEditor({
           }
         }
 
+        // Apply read-only mode to the CodeMirror instance when opened as a viewer
+        if (initialReadOnly) {
+          extensions.push(EditorState.readOnly.of(true))
+        }
+
         const state = EditorState.create({
           doc: initialCode ?? DEFAULT_CODE,
           extensions: extensions as never[],

@@ -1,6 +1,11 @@
 /**
  * Coinray API Client
- * Fetches historical OHLCV data and subscribes to real-time updates
+ * Fetches historical OHLCV data and subscribes to real-time updates.
+ *
+ * Subscription model: one Coinray WebSocket stream per ticker+resolution.
+ * Multiple script executions that share the same ticker+resolution fan out from
+ * a single underlying stream. Coinray is only unsubscribed when the last handler
+ * for a given stream is removed.
  */
 
 import Coinray from 'coinrayjs'
@@ -38,8 +43,23 @@ function getCoinray(): Coinray {
   return coinrayInstance
 }
 
+/**
+ * One shared Coinray WebSocket subscription per ticker+resolution.
+ * Holds an arbitrary number of per-execution tick handlers.
+ */
+interface SharedStream {
+  /** Unsubscribe from Coinray (called only when handlers is empty) */
+  unsubscribeCoinray: () => Promise<void>
+  /** Per-execution tick handlers: handlerId → callback */
+  handlers: Map<string, (candle: Candle) => void>
+}
+
 export class CoinrayClient {
-  private subscriptions = new Map<string, () => Promise<void>>()
+  /** Map: subscriptionKey ("BTCUSDT_60") → shared stream */
+  private streams = new Map<string, SharedStream>()
+  /** Reverse map: handlerId → subscriptionKey (for O(1) lookup in removeTickHandler) */
+  private handlerToKey = new Map<string, string>()
+  private handlerCounter = 0
 
   /**
    * Convert superchart period to Coinray resolution format
@@ -117,7 +137,12 @@ export class CoinrayClient {
   }
 
   /**
-   * Subscribe to real-time candle updates
+   * Subscribe a tick handler to a ticker+resolution stream.
+   *
+   * If a Coinray subscription already exists for this stream, `onTick` is added
+   * as an additional handler — no new Coinray connection is opened.
+   *
+   * @returns A unique `handlerId`. Pass it to `removeTickHandler()` to clean up.
    */
   async subscribeKlines(
     symbol: SymbolInfo,
@@ -127,41 +152,61 @@ export class CoinrayClient {
     const coinray = getCoinray()
     const resolution = this.periodToResolution(period)
     const subscriptionKey = `${symbol.ticker}_${resolution}`
+    const handlerId = `${subscriptionKey}_${++this.handlerCounter}`
 
-    // Unsubscribe if already subscribed
-    if (this.subscriptions.has(subscriptionKey)) {
-      await this.unsubscribe(subscriptionKey)
+    let stream = this.streams.get(subscriptionKey)
+
+    if (!stream) {
+      // First handler for this stream — open a Coinray subscription
+      console.log(`[Coinray] Subscribing to ${symbol.ticker}@${resolution}`)
+
+      const unsubscribeCoinray = await coinray.subscribeCandles(
+        { coinraySymbol: symbol.ticker, resolution },
+        (payload: CandlePayload) => {
+          if (!payload || !payload.candle) return
+          const candle = this.coinrayCandleToCandle(payload.candle)
+          // Fan out to all registered handlers
+          for (const handler of this.streams.get(subscriptionKey)?.handlers.values() ?? []) {
+            handler(candle)
+          }
+        }
+      )
+
+      stream = { unsubscribeCoinray, handlers: new Map() }
+      this.streams.set(subscriptionKey, stream)
+      console.log(`[Coinray] Subscribed to ${symbol.ticker}@${resolution}`)
+    } else {
+      console.log(`[Coinray] Reusing existing stream ${symbol.ticker}@${resolution} (handlers: ${stream.handlers.size + 1})`)
     }
 
-    console.log(`[Coinray] Subscribing to ${symbol.ticker}@${resolution}`)
+    stream.handlers.set(handlerId, onTick)
+    this.handlerToKey.set(handlerId, subscriptionKey)
 
-    // Subscribe to candles - returns unsubscribe function
-    const unsubscribe = await coinray.subscribeCandles(
-      {
-        coinraySymbol: symbol.ticker,
-        resolution,
-      },
-      (payload: CandlePayload) => {
-        if (!payload || !payload.candle) return
-        onTick(this.coinrayCandleToCandle(payload.candle))
-      }
-    )
-
-    this.subscriptions.set(subscriptionKey, unsubscribe)
-    console.log(`[Coinray] Subscribed to ${symbol.ticker}@${resolution}`)
-
-    return subscriptionKey
+    return handlerId
   }
 
   /**
-   * Unsubscribe from candle updates
+   * Remove a single tick handler.
+   * The Coinray subscription is kept alive as long as at least one other handler
+   * references the same stream. It is only closed when this is the last handler.
    */
-  async unsubscribe(subscriptionKey: string): Promise<void> {
-    const unsubscribe = this.subscriptions.get(subscriptionKey)
-    if (unsubscribe) {
-      await unsubscribe()
-      this.subscriptions.delete(subscriptionKey)
-      console.log(`[Coinray] Unsubscribed from ${subscriptionKey}`)
+  async removeTickHandler(handlerId: string): Promise<void> {
+    const subscriptionKey = this.handlerToKey.get(handlerId)
+    if (!subscriptionKey) return
+
+    const stream = this.streams.get(subscriptionKey)
+    if (!stream) return
+
+    stream.handlers.delete(handlerId)
+    this.handlerToKey.delete(handlerId)
+
+    if (stream.handlers.size === 0) {
+      // Last handler removed — close the Coinray connection for this stream
+      await stream.unsubscribeCoinray()
+      this.streams.delete(subscriptionKey)
+      console.log(`[Coinray] Unsubscribed from ${subscriptionKey} (no more handlers)`)
+    } else {
+      console.log(`[Coinray] Removed handler from ${subscriptionKey} (${stream.handlers.size} remaining)`)
     }
   }
 
@@ -169,14 +214,15 @@ export class CoinrayClient {
    * Cleanup all subscriptions
    */
   async dispose(): Promise<void> {
-    for (const [key, unsubscribe] of this.subscriptions) {
+    for (const [key, stream] of this.streams) {
       try {
-        await unsubscribe()
+        await stream.unsubscribeCoinray()
       } catch (error) {
         console.error(`Error unsubscribing from ${key}:`, error)
       }
     }
-    this.subscriptions.clear()
+    this.streams.clear()
+    this.handlerToKey.clear()
   }
 
   /**
