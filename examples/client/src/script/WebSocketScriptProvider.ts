@@ -26,9 +26,11 @@ export class WebSocketScriptProvider implements ScriptProvider {
   private activeSubscriptions = new Map<string, {
     onDataHandler?: IndicatorDataHandler
     onTickHandler?: IndicatorTickHandler
+    onHistoryHandler?: IndicatorDataHandler
     onErrorHandler?: (error: Error) => void
     bufferedData: any[]
     bufferedTicks: any[]
+    bufferedHistory: any[][]
   }>()
 
   constructor(private url: string) {
@@ -99,6 +101,10 @@ export class WebSocketScriptProvider implements ScriptProvider {
         this.handleIndicatorTick(message)
         break
 
+      case 'indicatorHistory':
+        this.handleIndicatorHistory(message)
+        break
+
       case 'error':
         this.handleError(message)
         break
@@ -114,6 +120,17 @@ export class WebSocketScriptProvider implements ScriptProvider {
     } else {
       // Buffer data until handler is registered (fixes race condition)
       subscription.bufferedData.push(data)
+    }
+  }
+
+  private handleIndicatorHistory(message: any): void {
+    const { scriptId, data } = message
+    const subscription = this.activeSubscriptions.get(scriptId)
+    if (!subscription) return
+    if (subscription.onHistoryHandler) {
+      subscription.onHistoryHandler(data)
+    } else {
+      subscription.bufferedHistory.push(data)
     }
   }
 
@@ -189,12 +206,15 @@ export class WebSocketScriptProvider implements ScriptProvider {
     const subscriptionHandlers: {
       onDataHandler?: IndicatorDataHandler
       onTickHandler?: IndicatorTickHandler
+      onHistoryHandler?: IndicatorDataHandler
       onErrorHandler?: (error: Error) => void
       bufferedData: any[]
       bufferedTicks: any[]
+      bufferedHistory: any[][]
     } = {
       bufferedData: [],
       bufferedTicks: [],
+      bufferedHistory: [],
     }
 
     this.activeSubscriptions.set(scriptId, subscriptionHandlers)
@@ -223,6 +243,15 @@ export class WebSocketScriptProvider implements ScriptProvider {
         subscriptionHandlers.bufferedTicks = []
       },
 
+      // onHistory merges historical backfill data (replays any buffered batches)
+      onHistory(handler: IndicatorDataHandler) {
+        subscriptionHandlers.onHistoryHandler = handler
+        for (const data of subscriptionHandlers.bufferedHistory) {
+          handler(data)
+        }
+        subscriptionHandlers.bufferedHistory = []
+      },
+
       // onError is optional
       onError(handler: (error: Error) => void) {
         subscriptionHandlers.onErrorHandler = handler
@@ -230,6 +259,19 @@ export class WebSocketScriptProvider implements ScriptProvider {
     }
 
     return subscription
+  }
+
+  /**
+   * Request historical indicator data for all active subscriptions.
+   * Called by the DataLoader when older chart bars are loaded.
+   * @param before Unix ms timestamp — server fetches candles before this point
+   */
+  loadHistoryBefore(before: number): void {
+    for (const [scriptId] of this.activeSubscriptions) {
+      if (this.ws && this.connected) {
+        this.ws.send(JSON.stringify({ type: 'loadHistory', scriptId, before }))
+      }
+    }
   }
 
   async stop(scriptId: string): Promise<void> {
