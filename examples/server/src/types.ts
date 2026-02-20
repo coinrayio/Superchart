@@ -215,6 +215,19 @@ export interface StopRequest extends WSMessage {
   scriptId: string
 }
 
+export interface LoadHistoryRequest extends WSMessage {
+  type: 'loadHistory'
+  scriptId: string
+  /** Unix ms timestamp — fetch candles whose timestamps are earlier than this value */
+  before: number
+}
+
+export interface HistoryMessage extends WSMessage {
+  type: 'indicatorHistory'
+  scriptId: string
+  data: IndicatorDataPoint[]
+}
+
 export interface CompileResponse extends WSMessage {
   type: 'compileResult'
   result: ScriptCompileResult
@@ -242,4 +255,43 @@ export interface ErrorMessage extends WSMessage {
   type: 'error'
   error: string
   scriptId?: string
+}
+
+export interface ListIndicatorsRequest extends WSMessage {
+  type: 'listIndicators'
+}
+
+export interface ListIndicatorsResponse extends WSMessage {
+  type: 'indicatorList'
+  indicators: Array<{
+    name: string
+    shortName: string
+    description?: string
+    category: string
+    paneId: string
+    isOverlay: boolean
+    isNew: boolean
+    isUpdated: boolean
+    defaultSettings: Record<string, SettingValue>
+  }>
+}
+
+export interface ExecutePresetRequest extends WSMessage {
+  type: 'executePreset'
+  /** Indicator name as stored in the db (looked up by name) */
+  indicatorName: string
+  symbol: SymbolInfo
+  period: Period
+  settings?: Record<string, SettingValue>
+}
+
+export interface GetIndicatorCodeRequest extends WSMessage {
+  type: 'getIndicatorCode'
+  indicatorName: string
+}
+
+export interface GetIndicatorCodeResponse extends WSMessage {
+  type: 'indicatorCode'
+  indicatorName: string
+  code: string
 }

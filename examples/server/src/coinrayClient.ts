@@ -84,16 +84,18 @@ export class CoinrayClient {
 
   /**
    * Fetch historical OHLCV data
+   * @param before - Optional Unix ms timestamp. When set, fetches `limit` candles ending before this time.
    */
   async fetchHistory(
     symbol: SymbolInfo,
     period: Period,
-    limit: number = 500
+    limit: number = 500,
+    before?: number
   ): Promise<Candle[]> {
     try {
       const coinray = getCoinray()
       const resolution = this.periodToResolution(period)
-      const end = Math.floor(Date.now() / 1000)
+      const end = before ? Math.floor(before / 1000) : Math.floor(Date.now() / 1000)
       const start = end - (limit * this.resolutionToSeconds(resolution))
 
       const candles = await coinray.fetchCandles({
