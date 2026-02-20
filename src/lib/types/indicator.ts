@@ -74,6 +74,13 @@ export interface IndicatorProvider {
   ): Promise<void>
 
   /**
+   * Optional: Fetch the Pine Script source code for a preset indicator.
+   * Used for read-only display in the script editor when the user clicks
+   * the code icon on an indicator tooltip.
+   */
+  getIndicatorCode?(indicatorName: string): Promise<string>
+
+  /**
    * Optional: Called when the chart is destroyed.
    * Clean up all subscriptions.
    */
@@ -105,6 +112,12 @@ export interface IndicatorDefinition {
 
   /** Whether this indicator overlays on price (vs separate pane) */
   isOverlay?: boolean
+
+  /** Badge: indicator was recently added to the server */
+  isNew?: boolean
+
+  /** Badge: indicator was recently updated on the server */
+  isUpdated?: boolean
 }
 
 export type IndicatorCategory =
@@ -154,6 +167,13 @@ export interface IndicatorSubscription {
    * Called on each new candle or candle update.
    */
   onTick(handler: IndicatorTickHandler): void
+
+  /**
+   * Register handler for historical backfill data.
+   * Called when older bars are loaded (user scrolls back).
+   * Data is merged into the existing store — not replaced.
+   */
+  onHistory?(handler: IndicatorDataHandler): void
 
   /**
    * Register error handler
