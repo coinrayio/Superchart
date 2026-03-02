@@ -37,6 +37,7 @@ export function SuperchartCanvas({
       debug: false
     })
 
+    ;(window.parent as any).superchart = superchart
     onReady?.(superchart)
 
     // WORKAROUND: Superchart has no onReady callback.

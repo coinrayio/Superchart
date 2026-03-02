@@ -98,7 +98,7 @@ const meta: Meta<typeof TradesDemo> = {
     sellColor: {control: "color", description: "Sell marker color"},
     textColor: {control: "color", description: "Label text color"},
     markerSymbol: {control: "inline-radio", options: ["thick-arrow", "thin-arrow", "triangle"], description: "Marker shape"},
-    numTrades: {control: {type: "number", min: 1, max: 10, step: 1}, description: "Number of trades to show"},
+    numTrades: {control: {type: "number", min: 1, max: 100, step: 1}, description: "Number of trades to show"},
     spacingHours: {control: {type: "number", min: 0.5, step: 0.5}, description: "Hours between each trade"},
     symbol: {control: "text", table: {category: "Chart"}},
   },
