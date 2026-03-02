@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import i18n from '../../i18n'
 import * as store from '../../store/chartStore'
+import { log } from '../../utils/log'
 import type { ScriptLanguageDefinition, ScriptDiagnostic } from '../../types/script'
 import { defaultScriptLanguage } from './defaultLanguage'
 
@@ -271,7 +272,7 @@ export function ScriptEditor({
             )
             extensions.push(...langExts)
           } catch (error) {
-            console.info('[ScriptEditor] Language adapter import failed — continue without syntax highlighting', error)
+            log('[ScriptEditor] Language adapter import failed — continue without syntax highlighting', error)
           }
         }
 

@@ -24,6 +24,7 @@ import type { UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { Period, SymbolInfo } from '../types/chart'
 import type { SuperchartApi } from './Superchart'
 import * as store from '../store/chartStore'
+import { log } from '../utils/log'
 import { useChartState } from '../hooks/useChartState'
 import { translateTimezone } from '../widget/timezone-modal/data'
 
@@ -118,6 +119,12 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const overlaySettingVisible = useStoreValue(showOverlaySetting, subscribeShowOverlaySetting)
   const mainIndicators = useStoreValue(store.mainIndicators, store.subscribeMainIndicators)
   const subIndicators = useStoreValue(store.subIndicators, store.subscribeSubIndicators)
+
+  // Debug logging
+  // useEffect(() => {
+  //   log('[SuperchartComponent] Render state:', { symbol, period, theme, locale })
+  // }, [symbol, period, theme, locale])
+
 
   const { createIndicator, pushOverlay } = useChartState()
 
@@ -448,7 +455,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
     onApiReady(api)
   }, [onApiReady, pushOverlay, backendApi, timezone, symbol, period, locale])
 
-  console.log('[SuperchartComponent] About to render. symbol:', symbol, 'period:', period)
+  log('[SuperchartComponent] About to render. symbol:', symbol, 'period:', period)
 
   return (
     <div
@@ -646,7 +653,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
               const { registerIndicator } = await import('klinecharts')
 
               // Build figures from metadata plots
-              console.log('[Script] metadata.plots:', JSON.stringify(subscription.metadata.plots, null, 2))
+              log('[Script] metadata.plots:', JSON.stringify(subscription.metadata.plots, null, 2))
               const figures: any[] = []
               const hlineKeys: { key: string; id: string; price: number }[] = []
               const fillPlots: { plot1: string; plot2: string; color: string; transp?: number }[] = []
@@ -749,9 +756,9 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
 
               // Collect all figure keys for null fallback in calc
               const allFigureKeys = figures.map((f: any) => f.key)
-              console.log('[Script] allFigureKeys:', allFigureKeys)
-              console.log('[Script] gapConnectPlots:', gapConnectPlots)
-              console.log('[Script] shapePlots:', shapePlots)
+              log('[Script] allFigureKeys:', allFigureKeys)
+              log('[Script] gapConnectPlots:', gapConnectPlots)
+              log('[Script] shapePlots:', shapePlots)
 
               // Build draw callback for custom rendering (fill, shapes, gap-connect lines)
               const hasFills = fillPlots.length > 0
@@ -1031,7 +1038,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
                         hasLastPt = true
                       }
                     }
-                    console.log(`[Script draw] gc "${gc.id}": ${nonNullCount} non-null, ${colorCount} with per-bar color, ${transparentCount} transparent, ${drawnCount} segments to draw, gc.color="${gc.color}"`)
+                    log(`[Script draw] gc "${gc.id}": ${nonNullCount} non-null, ${colorCount} with per-bar color, ${transparentCount} transparent, ${drawnCount} segments to draw, gc.color="${gc.color}"`)
                   }
                 }
                 const dataList = chart.getDataList()
@@ -1117,7 +1124,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
                     return result
                   })
                   if (calcGcCount > 0) {
-                    console.log(`[Script calc] gapConnect data points in calc: ${calcGcCount}, dataStore size: ${dataStore.size}`)
+                    log(`[Script calc] gapConnect data points in calc: ${calcGcCount}, dataStore size: ${dataStore.size}`)
                   }
                   return mapped
                 },
@@ -1161,9 +1168,9 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
                       colorSampleCount++
                     }
                   }
-                  console.log('[Script] onData: total points:', points.length, 'all value keys:', [...allKeys])
-                  console.log('[Script] onData: gapConnect samples:', nonNullSamples)
-                  console.log('[Script] onData: color samples:', colorSamples)
+                  log('[Script] onData: total points:', points.length, 'all value keys:', [...allKeys])
+                  log('[Script] onData: gapConnect samples:', nonNullSamples)
+                  log('[Script] onData: color samples:', colorSamples)
                 }
                 chart.overrideIndicator({ name: templateName })
               })
@@ -1194,7 +1201,7 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
           }}
           onSave={async (code, name) => {
             // Save script logic here
-            console.log('Saving script:', name, code)
+            log('Saving script:', name, code)
           }}
         />
       )}

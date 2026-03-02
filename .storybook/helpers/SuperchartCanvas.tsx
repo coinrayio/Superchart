@@ -34,6 +34,7 @@ export function SuperchartCanvas({
       period: {type: "hour", span: 1, text: period},
       dataLoader,
       theme,
+      debug: false
     })
 
     onReady?.(superchart)

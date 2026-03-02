@@ -147,6 +147,10 @@ export interface SuperchartOptions {
   onPeriodChange?: (period: Period) => void
   /** Called when the visible range changes (scroll, zoom, data load) */
   onVisibleRangeChange?: (range: VisibleTimeRange) => void
+
+  // Optional - Logging
+  /** Enable debug logging (default: true). Set to false to silence non-essential logs. */
+  debug?: boolean
 }
 
 export interface SuperchartApi {
@@ -278,6 +282,8 @@ export default class Superchart implements SuperchartApi {
     store.setTimezone(options.timezone ?? 'Etc/UTC')
     store.setMainIndicators(options.mainIndicators ?? [])
     store.setDrawingBarVisible(options.drawingBarVisible ?? false)
+
+    store.setDebug(options.debug ?? true)
 
     if (options.storageAdapter) {
       store.setStorageAdapter(options.storageAdapter)
