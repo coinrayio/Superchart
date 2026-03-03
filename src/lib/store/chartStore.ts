@@ -66,6 +66,7 @@ export const [subIndicators, setSubIndicators, subscribeSubIndicators] = createS
 
 // Overlays
 export const [selectedOverlay, setSelectedOverlay, subscribeSelectedOverlay] = createSignal<Nullable<Overlay>>(null)
+export const [selectedOverlayPosition, setSelectedOverlayPosition, subscribeSelectedOverlayPosition] = createSignal<{ x: number; y: number }>({ x: 0, y: 0 })
 
 // Storage
 export const [storageAdapter, setStorageAdapter, subscribeStorageAdapter] = createSignal<Nullable<StorageAdapter>>(null)
@@ -105,6 +106,7 @@ export function resetStore(): void {
   setMainIndicators([])
   setSubIndicators({})
   setSelectedOverlay(null)
+  setSelectedOverlayPosition({ x: 0, y: 0 })
   setStorageAdapter(null)
   setStorageKey('')
   setIndicatorProvider(null)
@@ -131,6 +133,7 @@ export const storeSubscriptions = {
   mainIndicators: subscribeMainIndicators,
   subIndicators: subscribeSubIndicators,
   selectedOverlay: subscribeSelectedOverlay,
+  selectedOverlayPosition: subscribeSelectedOverlayPosition,
   storageAdapter: subscribeStorageAdapter,
   storageKey: subscribeStorageKey,
   indicatorProvider: subscribeIndicatorProvider,
