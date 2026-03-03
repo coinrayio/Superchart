@@ -8,7 +8,7 @@
  * - etc.
  */
 
-import type { DeepPartial, Styles, PaneOptions } from 'klinecharts'
+import type { DeepPartial, Styles, PaneOptions, OverlayProperties } from 'klinecharts'
 import type { PaneLayout } from './chart'
 import type { SavedOverlay } from './overlay'
 
@@ -118,6 +118,9 @@ export interface ChartState {
 
   /** Optional: Period this state was saved for */
   period?: string
+
+  /** Default style templates per overlay type (e.g., { straightLine: { lineColor: '#ff0000' } }) */
+  overlayDefaults?: Record<string, DeepPartial<OverlayProperties>>
 }
 
 /**

@@ -11,7 +11,11 @@ export interface ColorProps {
   value?: ReactNode
   valueKey?: string
   reactiveChange?: boolean
+  /** Start with the picker open */
+  defaultOpen?: boolean
   onChange?: (data: string) => void
+  /** Called when the picker closes (Ok or Cancel) */
+  onClose?: () => void
 }
 
 const COLOR_PALETTE = [
@@ -126,13 +130,15 @@ export function Color({
   className,
   value,
   reactiveChange = true,
+  defaultOpen = false,
   onChange,
+  onClose,
 }: ColorProps) {
   const initialOpacity = String(value).includes('rgba')
     ? chroma(String(value)).alpha() * 100
     : 100
 
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [opacity, setOpacity] = useState(initialOpacity)
   const [selectedColor, setSelectedColor] = useState<ReactNode>(value)
   const [finalColor, setFinalColor] = useState<ReactNode>(value)
@@ -161,6 +167,7 @@ export function Color({
   const closeColorPalette = () => {
     setOpen(false)
     setCustomMode(false)
+    onClose?.()
   }
 
   const cancelColorChange = () => {

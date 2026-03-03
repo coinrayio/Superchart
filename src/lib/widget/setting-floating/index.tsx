@@ -1,61 +1,94 @@
 /**
  * Settings Floating Widget
- * A draggable floating toolbar for overlay settings
+ * A draggable floating toolbar for overlay settings.
+ *
+ * Reads selectedOverlay from chartStore directly.
+ * Uses getStrokeKeys() to map actions to the correct properties per overlay type:
+ *   - Lines use lineColor/lineWidth/lineStyle
+ *   - Shapes use borderColor/borderWidth/borderStyle
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { Color } from '../../component'
-
-export interface FloatingAction {
-  key: string
-  title?: string
-  icon?: string
-  visible?: boolean | ((overlay?: unknown) => boolean)
-  editor?: {
-    type: 'color' | 'number' | 'select' | 'dropdown'
-    value?: string | number
-    options?: string[]
-    min?: number
-    max?: number
-    step?: number
-  }
-  onClick?: (overlayId: string, value?: unknown) => void
-}
+import DragIcon from '../icons/drag'
+import { Icon } from '../icons'
+import * as store from '../../store/chartStore'
+import { useChartState } from '../../hooks/useChartState'
+import { setPopupOverlay, setShowOverlaySetting } from '../../store/overlaySettingStore'
+import type { ProOverlay, OverlayProperties } from '../../types/overlay'
+import type { DeepPartial } from 'klinecharts'
+import {
+  schemaHasField,
+  klineStylesToOverlayProperties,
+  getStrokeKeys,
+  getLineStylePreset,
+  LINE_STYLE_PRESETS,
+  type LineStylePreset,
+} from '../overlay/overlayPropertySchemas'
 
 export interface FloatingProps {
   locale?: string
-  x?: number
-  y?: number
-  actions?: FloatingAction[]
-  overlay?: { id: string; lock?: boolean; [key: string]: unknown }
   onClose?: () => void
   className?: string
 }
 
-const DragIcon = () => (
-  <svg viewBox="0 0 24 24" className="icon-drag">
-    <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-  </svg>
-)
+function useStoreValue<T>(
+  getValue: () => T,
+  subscribe: (listener: (value: T) => void) => () => void
+): T {
+  return useSyncExternalStore(subscribe, getValue, getValue)
+}
 
-export function SettingFloating({
-  x = 0,
-  y = 0,
-  actions = [],
-  overlay,
-  onClose,
-  className,
-}: FloatingProps) {
+// Inline SVG for line width icons — each shows a line of the given pixel thickness
+function WidthIcon({ px }: { px: number }) {
+  const h = Math.max(1, px)
+  const y = (28 - h) / 2
+  return (
+    <svg viewBox="0 0 28 28" width="28" height="28" fill="currentColor">
+      <rect x="4" y={y} width="20" height={h} rx={Math.min(h / 2, 1)} />
+    </svg>
+  )
+}
+
+const WIDTH_OPTIONS = [1, 2, 3, 4]
+
+const STYLE_OPTIONS: { key: LineStylePreset; icon: string }[] = [
+  { key: 'solid', icon: 'line' },
+  { key: 'dashed', icon: 'lineDashed' },
+  { key: 'dotted', icon: 'lineDotted' },
+]
+
+export function SettingFloating({ onClose, className }: FloatingProps) {
+  const overlay = useStoreValue(store.selectedOverlay, store.subscribeSelectedOverlay) as ProOverlay | null
+
+  const { popOverlay, modifyOverlay, modifyOverlayProperties } = useChartState()
+
   const containerRef = useRef<HTMLDivElement>(null)
-  const [localPos, setLocalPos] = useState({ x, y })
+  const [localPos, setLocalPos] = useState(() => ({
+    x: Math.max(500, window.innerWidth / 2),
+    y: 40,
+  }))
   const [dragging, setDragging] = useState(false)
   const [visibleEditorKey, setVisibleEditorKey] = useState<string | null>(null)
   const dragStartRef = useRef({ mx: 0, my: 0, sx: 0, sy: 0 })
+
+  // Local snapshot of overlay properties — ensures icons update immediately
+  const [localProps, setLocalProps] = useState<Record<string, unknown>>({})
+
+  // Sync local props when overlay changes or is selected
+  useEffect(() => {
+    if (!overlay) return
+    const props = overlay.getProperties
+      ? overlay.getProperties(overlay.id)
+      : klineStylesToOverlayProperties(overlay.styles as Record<string, unknown> | undefined)
+    setLocalProps(props as Record<string, unknown>)
+  }, [overlay?.id])
 
   // Close on outside click
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setVisibleEditorKey(null)
         onClose?.()
       }
     }
@@ -63,75 +96,61 @@ export function SettingFloating({
     return () => document.removeEventListener('mousedown', handleDocumentClick)
   }, [onClose])
 
-  // Update position from props
-  useEffect(() => {
-    if (typeof x === 'number' && typeof y === 'number') {
-      setLocalPos({ x, y })
-    }
-  }, [x, y])
-
   // Drag handlers
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!dragging) return
-      const { mx, my, sx, sy } = dragStartRef.current
-      const nxRaw = sx + (e.clientX - mx)
-      const nyRaw = sy + (e.clientY - my)
-      const maxX = Math.max(0, window.innerWidth - (containerRef.current?.offsetWidth ?? 220))
-      const maxY = Math.max(0, window.innerHeight - (containerRef.current?.offsetHeight ?? 48))
-      const nx = Math.min(Math.max(0, nxRaw), maxX)
-      const ny = Math.min(Math.max(0, nyRaw), maxY)
-      setLocalPos({ x: nx, y: ny })
-    },
-    [dragging]
-  )
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const { mx, my, sx, sy } = dragStartRef.current
+    const nxRaw = sx + (e.clientX - mx)
+    const nyRaw = sy + (e.clientY - my)
+    const maxX = Math.max(0, window.innerWidth - (containerRef.current?.offsetWidth ?? 220))
+    const maxY = Math.max(0, window.innerHeight - (containerRef.current?.offsetHeight ?? 48))
+    setLocalPos({
+      x: Math.min(Math.max(0, nxRaw), maxX),
+      y: Math.min(Math.max(0, nyRaw), maxY),
+    })
+  }, [])
 
   const handleMouseUp = useCallback(() => {
     setDragging(false)
-  }, [])
-
-  useEffect(() => {
-    if (dragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [dragging, handleMouseMove, handleMouseUp])
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }, [handleMouseMove])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
-    if (
-      target.closest('.superchart-action-btn') ||
-      target.closest('.superchart-editor') ||
-      target.tagName === 'INPUT' ||
-      target.tagName === 'SELECT'
-    ) {
-      return
-    }
+    if (target.closest('.cr-action-btn') || target.closest('.cr-editor') ||
+        target.tagName === 'INPUT' || target.tagName === 'SELECT') return
     e.preventDefault()
-    dragStartRef.current = {
-      mx: e.clientX,
-      my: e.clientY,
-      sx: localPos.x,
-      sy: localPos.y,
-    }
+    dragStartRef.current = { mx: e.clientX, my: e.clientY, sx: localPos.x, sy: localPos.y }
     setDragging(true)
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
-  const runAction = (act: FloatingAction, value?: unknown) => {
-    const id = overlay?.id
-    if (act.onClick && id) {
-      act.onClick(id, value)
-    }
+  // Helper: apply properties and update local state immediately
+  const applyProps = (props: DeepPartial<OverlayProperties>) => {
+    if (!overlay) return
+    setLocalProps(prev => ({ ...prev, ...props }))
+    modifyOverlayProperties(overlay.id, props)
   }
+
+  if (!overlay) return null
+
+  const name = overlay.name ?? ''
+  const stroke = getStrokeKeys(name)
+  const hasBackground = schemaHasField(name, 'backgroundColor')
+  const hasText = schemaHasField(name, 'textColor')
+  const hasStroke = schemaHasField(name, stroke.colorKey)
+
+  const strokeColor = (localProps[stroke.colorKey] as string) ?? '#1677FF'
+  const strokeWidth = (localProps[stroke.widthKey] as number) ?? 1
+  const strokeStyle = (localProps[stroke.styleKey] as string) ?? 'solid'
+  const dashedValue = localProps.lineDashedValue as number[] | undefined
+  const currentPreset = getLineStylePreset(strokeStyle, dashedValue)
 
   return (
     <div
       ref={containerRef}
-      className={`superchart-setting-floating ${className ?? ''} ${dragging ? 'dragging' : ''}`}
+      className={`cr-setting-floating ${className ?? ''} ${dragging ? 'dragging' : ''}`}
       style={{
         position: 'fixed',
         left: `${localPos.x}px`,
@@ -142,87 +161,177 @@ export function SettingFloating({
       onPointerDown={(e) => e.stopPropagation()}
       onMouseDown={handleMouseDown}
     >
-      <div className="superchart-floating-inner">
-        <div className="drag-handle">
-          <DragIcon />
-        </div>
-        {actions.map((act) => {
-          const isVisible =
-            typeof act.visible === 'function'
-              ? act.visible(overlay)
-              : (act.visible ?? true)
-          if (!isVisible) return null
+      <div className="cr-floating-inner">
+        <div className="drag-handle"><DragIcon /></div>
 
-          return (
-            <div key={act.key} className="superchart-action" title={act.title ?? act.key}>
-              <div
-                className="superchart-action-btn"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (act.editor) {
-                    setVisibleEditorKey(visibleEditorKey === act.key ? null : act.key)
-                  } else {
-                    runAction(act)
-                  }
-                }}
-              >
-                <div
-                  className="superchart-action-icon"
-                  style={
-                    act.editor?.type === 'color'
-                      ? { height: 16, width: 16 }
-                      : undefined
-                  }
-                >
-                  {act.icon && <span>{act.icon}</span>}
-                </div>
-                {act.editor?.type === 'color' && (
-                  <div
-                    className="superchart-action-label"
-                    style={{ backgroundColor: act.editor.value as string }}
-                  />
-                )}
+        {/* Stroke color */}
+        {hasStroke && (
+          <div className="cr-action" title="Stroke color">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => { e.stopPropagation(); setVisibleEditorKey(visibleEditorKey === 'stroke' ? null : 'stroke') }}
+            >
+              <div className="cr-action-icon" style={{ height: 16, width: 16 }}>
+                <Icon name="edit" />
               </div>
-
-              {act.editor && visibleEditorKey === act.key && (
-                <div className="superchart-editor" onClick={(e) => e.stopPropagation()}>
-                  {act.editor.type === 'color' && (
-                    <Color
-                      style={{ width: 120 }}
-                      value={act.editor.value as string}
-                      reactiveChange={false}
-                      onChange={(el) => runAction(act, el)}
-                    />
-                  )}
-                  {act.editor.type === 'number' && (
-                    <input
-                      type="number"
-                      min={act.editor.min}
-                      max={act.editor.max}
-                      step={act.editor.step}
-                      value={String(act.editor.value ?? '')}
-                      onChange={(e) => runAction(act, Number(e.target.value))}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  )}
-                  {act.editor.type === 'select' && (
-                    <select
-                      value={(act.editor.value as string) ?? ''}
-                      onChange={(e) => runAction(act, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {(act.editor.options ?? []).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
+              <div className="cr-action-label" style={{ backgroundColor: strokeColor }} />
             </div>
-          )
-        })}
+            {visibleEditorKey === 'stroke' && (
+              <div className="cr-editor cr-color-editor" onClick={(e) => e.stopPropagation()}>
+                <Color
+                  value={strokeColor}
+                  reactiveChange={true}
+                  defaultOpen={true}
+                  onChange={(color) => applyProps({ [stroke.colorKey]: color } as any)}
+                  onClose={() => setVisibleEditorKey(null)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Background / fill color */}
+        {hasBackground && (
+          <div className="cr-action" title="Fill color">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => { e.stopPropagation(); setVisibleEditorKey(visibleEditorKey === 'fill' ? null : 'fill') }}
+            >
+              <div className="cr-action-icon" style={{ height: 16, width: 16 }}>
+                <Icon name="fill" />
+              </div>
+              <div
+                className="cr-action-label"
+                style={{ backgroundColor: (localProps.backgroundColor as string) ?? 'rgba(22, 119, 255, 0.25)' }}
+              />
+            </div>
+            {visibleEditorKey === 'fill' && (
+              <div className="cr-editor cr-color-editor" onClick={(e) => e.stopPropagation()}>
+                <Color
+                  value={(localProps.backgroundColor as string) ?? 'rgba(22, 119, 255, 0.25)'}
+                  reactiveChange={true}
+                  defaultOpen={true}
+                  onChange={(color) => applyProps({ backgroundColor: color })}
+                  onClose={() => setVisibleEditorKey(null)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Text color */}
+        {hasText && (
+          <div className="cr-action" title="Text color">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => { e.stopPropagation(); setVisibleEditorKey(visibleEditorKey === 'text' ? null : 'text') }}
+            >
+              <div className="cr-action-icon" style={{ height: 16, width: 16 }}>
+                <Icon name="text" />
+              </div>
+              <div
+                className="cr-action-label"
+                style={{ backgroundColor: (localProps.textColor as string) ?? '#ffffff' }}
+              />
+            </div>
+            {visibleEditorKey === 'text' && (
+              <div className="cr-editor cr-color-editor" onClick={(e) => e.stopPropagation()}>
+                <Color
+                  value={(localProps.textColor as string) ?? '#ffffff'}
+                  reactiveChange={true}
+                  defaultOpen={true}
+                  onChange={(color) => applyProps({ textColor: color })}
+                  onClose={() => setVisibleEditorKey(null)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Stroke width — icon-based selector */}
+        {hasStroke && (
+          <div className="cr-action" title="Line width">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => { e.stopPropagation(); setVisibleEditorKey(visibleEditorKey === 'width' ? null : 'width') }}
+            >
+              <div className="cr-action-icon"><WidthIcon px={strokeWidth} /></div>
+            </div>
+            {visibleEditorKey === 'width' && (
+              <div className="cr-editor cr-width-editor" onClick={(e) => e.stopPropagation()}>
+                {WIDTH_OPTIONS.map(px => (
+                  <div
+                    key={px}
+                    className={`cr-width-option ${strokeWidth === px ? 'active' : ''}`}
+                    title={`${px}px`}
+                    onClick={() => {
+                      applyProps({ [stroke.widthKey]: px } as any)
+                      setVisibleEditorKey(null)
+                    }}
+                  >
+                    <WidthIcon px={px} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Line style — solid / dashed / dotted */}
+        {hasStroke && (
+          <div className="cr-action" title="Line style">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => { e.stopPropagation(); setVisibleEditorKey(visibleEditorKey === 'style' ? null : 'style') }}
+            >
+              <div className="cr-action-icon">
+                <Icon name={STYLE_OPTIONS.find(s => s.key === currentPreset)?.icon ?? 'line'} />
+              </div>
+            </div>
+            {visibleEditorKey === 'style' && (
+              <div className="cr-editor cr-line-style-editor" onClick={(e) => e.stopPropagation()}>
+                {STYLE_OPTIONS.map(opt => (
+                  <div
+                    key={opt.key}
+                    className={`cr-line-style-option ${currentPreset === opt.key ? 'active' : ''}`}
+                    title={opt.key}
+                    onClick={() => {
+                      const preset = LINE_STYLE_PRESETS[opt.key]
+                      applyProps({
+                        [stroke.styleKey]: preset.style,
+                        lineDashedValue: preset.dashedValue,
+                      } as any)
+                      setVisibleEditorKey(null)
+                    }}
+                  >
+                    <Icon name={opt.icon} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settings */}
+        <div className="cr-action" title="Settings">
+          <div className="cr-action-btn" onClick={(e) => { e.stopPropagation(); setPopupOverlay(overlay); setShowOverlaySetting(true) }}>
+            <div className="cr-action-icon"><Icon name="settings" /></div>
+          </div>
+        </div>
+
+        {/* Lock/Unlock */}
+        <div className="cr-action" title={overlay.lock ? 'Unlock' : 'Lock'}>
+          <div className="cr-action-btn" onClick={(e) => { e.stopPropagation(); modifyOverlay(overlay.id, { lock: !overlay.lock }) }}>
+            <div className="cr-action-icon"><Icon name={overlay.lock ? 'locked' : 'unlocked'} /></div>
+          </div>
+        </div>
+
+        {/* Delete */}
+        <div className="cr-action" title="Delete">
+          <div className="cr-action-btn" onClick={(e) => { e.stopPropagation(); popOverlay(overlay.id) }}>
+            <div className="cr-action-icon"><Icon name="trash" /></div>
+          </div>
+        </div>
       </div>
     </div>
   )

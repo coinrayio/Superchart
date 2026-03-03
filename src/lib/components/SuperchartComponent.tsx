@@ -37,8 +37,16 @@ import SettingModal from '../widget/setting-modal'
 import ScreenshotModal from '../widget/screenshot-modal'
 import SymbolSearchModal from '../widget/symbol-search-modal'
 import SettingFloating from '../widget/setting-floating'
+import OverlayOptionsPopup from '../component/popup/overlay'
+import OverlaySettingModal from '../widget/overlay'
 import { ScriptEditor } from '../widget/script-editor'
 import { Loading } from '../component'
+import {
+  showOverlayPopup,
+  subscribeShowOverlayPopup,
+  showOverlaySetting,
+  subscribeShowOverlaySetting,
+} from '../store/overlaySettingStore'
 
 export interface SuperchartComponentProps {
   /** Ref callback to expose API */
@@ -106,13 +114,10 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const loadingVisible = useStoreValue(store.loadingVisible, store.subscribeLoadingVisible)
   const drawingBarVisible = useStoreValue(store.drawingBarVisible, store.subscribeDrawingBarVisible)
   const selectedOverlay = useStoreValue(store.selectedOverlay, store.subscribeSelectedOverlay)
+  const overlayPopupVisible = useStoreValue(showOverlayPopup, subscribeShowOverlayPopup)
+  const overlaySettingVisible = useStoreValue(showOverlaySetting, subscribeShowOverlaySetting)
   const mainIndicators = useStoreValue(store.mainIndicators, store.subscribeMainIndicators)
   const subIndicators = useStoreValue(store.subIndicators, store.subscribeSubIndicators)
-
-  // Debug logging
-  // useEffect(() => {
-  //   console.log('[SuperchartComponent] Render state:', { symbol, period, theme, locale })
-  // }, [symbol, period, theme, locale])
 
   const { createIndicator, pushOverlay } = useChartState()
 
@@ -548,8 +553,20 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
           />
         )}
 
-          {/* Settings floating (for overlay editing) */}
-          {selectedOverlay && <SettingFloating locale={locale} />}
+          {/* Settings floating (for overlay editing) — reads selectedOverlay from store */}
+          {selectedOverlay && (
+            <SettingFloating locale={locale} />
+          )}
+
+          {/* Overlay context menu (right-click / double-click) */}
+          {overlayPopupVisible && (
+            <OverlayOptionsPopup />
+          )}
+
+          {/* Overlay settings modal (full property editor) */}
+          {overlaySettingVisible && (
+            <OverlaySettingModal />
+          )}
 
           {/* Chart widget */}
           <div

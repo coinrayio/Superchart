@@ -21,6 +21,11 @@ import * as store from '../store/chartStore'
 import type { ChartState, SavedIndicator } from '../types/storage'
 import type { SavedOverlay, OverlayProperties, ProOverlay } from '../types/overlay'
 import { createEmptyChartState } from '../types/storage'
+import { ctrlKeyedDown } from '../store/keyEventStore'
+import { useOverlaySettings, setPopupOverlay, setShowOverlaySetting } from '../store/overlaySettingStore'
+import type { OverlayType } from '../store/overlaySettingStore'
+import { getDefaultForOverlay, setDefaultForOverlay, setOverlayDefaults } from '../store/overlayDefaultStyles'
+import { overlayPropertiesToKlineStyles } from '../widget/overlay/overlayPropertySchemas'
 
 /**
  * Convert Overlay to SavedOverlay format
@@ -214,67 +219,6 @@ export function useChartState(options: UseChartStateOptions = {}) {
   )
 
   /**
-   * Push overlay with event handlers
-   */
-  const pushOverlay = useCallback(
-    (
-      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
-      paneId?: string,
-      redrawing = false
-    ): Nullable<string> => {
-      const chartInstance = store.instanceApi()
-      if (!chartInstance) return null
-
-      const id = chartInstance.createOverlay({ ...overlay, paneId }) as Nullable<string>
-      if (!id) return null
-
-      const createdOverlay = chartInstance.getOverlays({ id })[0]
-      if (!createdOverlay) return id
-
-      // Apply properties if provided
-      if (overlay.properties && 'setProperties' in createdOverlay) {
-        ;(createdOverlay as ProOverlay).setProperties(overlay.properties, id)
-      }
-
-      // Setup event handlers
-      chartInstance.overrideOverlay({
-        id: createdOverlay.id,
-        onDrawEnd: (event) => {
-          // Don't sync temporary overlays like measure tool
-          if (!['measure'].includes(createdOverlay.name)) {
-            syncOverlay(event.overlay, overlay.properties)
-          }
-          return false
-        },
-        onPressedMoveEnd: (event) => {
-          if (!['measure'].includes(createdOverlay.name)) {
-            syncOverlay(event.overlay, overlay.properties)
-          }
-          return false
-        },
-        onSelected: (event) => {
-          store.setSelectedOverlay(event.overlay)
-          return false
-        },
-        onDeselected: () => {
-          store.setSelectedOverlay(null)
-          return false
-        },
-        onRightClick: createdOverlay.onRightClick ?? options.onOverlayRightClick,
-        onDoubleClick: createdOverlay.onDoubleClick ?? options.onOverlayDoubleClick,
-      })
-
-      // Sync to storage if not redrawing from saved state
-      if (!redrawing) {
-        syncOverlay(createdOverlay, overlay.properties)
-      }
-
-      return id
-    },
-    [syncOverlay, options.onOverlayRightClick, options.onOverlayDoubleClick]
-  )
-
-  /**
    * Remove overlay
    */
   const popOverlay = useCallback(
@@ -286,6 +230,108 @@ export function useChartState(options: UseChartStateOptions = {}) {
       store.instanceApi()?.removeOverlay({ id })
     },
     [loadState, saveState]
+  )
+
+  /**
+   * Push overlay with event handlers
+   */
+  const pushOverlay = useCallback(
+    (
+      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
+      paneId?: string,
+      redrawing = false
+    ): Nullable<string> => {
+      const chartInstance = store.instanceApi()
+      if (!chartInstance) return null
+
+      // Merge default style template when creating new overlays (not restoring from saved state)
+      const effectiveProperties = redrawing
+        ? overlay.properties
+        : { ...getDefaultForOverlay(overlay.name), ...overlay.properties }
+
+      const id = chartInstance.createOverlay({ ...overlay, paneId }) as Nullable<string>
+      if (!id) return null
+
+      const createdOverlay = chartInstance.getOverlays({ id })[0]
+      if (!createdOverlay) return id
+
+      // Apply properties to the overlay
+      const hasProps = effectiveProperties && Object.keys(effectiveProperties).length > 0
+      if (hasProps && 'setProperties' in createdOverlay) {
+        // ProOverlay: store in closure Map (read by createPointFigures during render)
+        ;(createdOverlay as ProOverlay).setProperties(effectiveProperties, id)
+      }
+
+      // Default right-click handler: Ctrl+click deletes, otherwise opens context menu
+      const handleRightClick = (event: OverlayEvent<unknown>): boolean => {
+        if (event.preventDefault)
+          event.preventDefault()
+        if (ctrlKeyedDown()) {
+          popOverlay(event.overlay.id)
+          return true
+        }
+        useOverlaySettings().openPopup(event, { overlayType: event.overlay.name as OverlayType })
+        return true
+      }
+
+      // Default double-click handler: opens overlay settings modal
+      const handleDoubleClick = (event: OverlayEvent<unknown>): boolean => {
+        setPopupOverlay(event.overlay as ProOverlay)
+        setShowOverlaySetting(true)
+        return true
+      }
+
+      // Compute klinecharts-level styles for the overrideOverlay call.
+      // For standard overlays (no setProperties), this is how properties take effect.
+      // For ProOverlays, a new styles reference forces shouldUpdate() to trigger a re-render
+      // so createPointFigures() picks up the updated closure Map.
+      const klineStyles = hasProps
+        ? ('setProperties' in createdOverlay
+            ? { ...(createdOverlay.styles ?? {}) }  // new ref → triggers re-render
+            : overlayPropertiesToKlineStyles(effectiveProperties as Partial<OverlayProperties>))
+        : undefined
+
+      // Setup event handlers + apply styles in one call
+      chartInstance.overrideOverlay({
+        id: createdOverlay.id,
+        ...(klineStyles ? { styles: klineStyles } : {}),
+        onDrawEnd: (event) => {
+          // Don't sync temporary overlays like measure tool
+          if (!['measure'].includes(createdOverlay.name)) {
+            syncOverlay(event.overlay, effectiveProperties)
+          }
+          return false
+        },
+        onPressedMoveEnd: (event) => {
+          if (!['measure'].includes(createdOverlay.name)) {
+            syncOverlay(event.overlay, effectiveProperties)
+          }
+          return false
+        },
+        onSelected: (event) => {
+          store.setSelectedOverlay(event.overlay)
+          store.setSelectedOverlayPosition({
+            x: event.pageX ?? 0,
+            y: event.pageY ?? 0,
+          })
+          return false
+        },
+        onDeselected: () => {
+          store.setSelectedOverlay(null)
+          return false
+        },
+        onRightClick: createdOverlay.onRightClick ?? options.onOverlayRightClick ?? handleRightClick,
+        onDoubleClick: createdOverlay.onDoubleClick ?? options.onOverlayDoubleClick ?? handleDoubleClick,
+      })
+
+      // Sync to storage if not redrawing from saved state
+      if (!redrawing) {
+        syncOverlay(createdOverlay, effectiveProperties)
+      }
+
+      return id
+    },
+    [syncOverlay, popOverlay, options.onOverlayRightClick, options.onOverlayDoubleClick]
   )
 
   /**
@@ -313,9 +359,36 @@ export function useChartState(options: UseChartStateOptions = {}) {
 
   /**
    * Modify overlay properties (styles)
+   *
+   * Visual updates (setProperties + overrideOverlay) and default template updates
+   * happen SYNCHRONOUSLY for immediate feedback. Storage persistence is async.
    */
   const modifyOverlayProperties = useCallback(
     async (id: string, properties: DeepPartial<OverlayProperties>): Promise<void> => {
+      // 1. Apply visual changes to the chart SYNCHRONOUSLY
+      const chartInstance = store.instanceApi()
+      const liveOverlay = chartInstance?.getOverlays({ id })[0]
+      if (liveOverlay) {
+        if ('setProperties' in liveOverlay) {
+          // ProOverlay: update closure Map, then force re-render with new styles reference
+          ;(liveOverlay as ProOverlay).setProperties(properties, id)
+          chartInstance!.overrideOverlay({ id, styles: { ...(liveOverlay.styles ?? {}) } })
+        } else {
+          // Standard overlay: convert to klinecharts OverlayStyle format
+          chartInstance!.overrideOverlay({
+            id,
+            styles: overlayPropertiesToKlineStyles(properties as Partial<OverlayProperties>),
+          })
+        }
+      }
+
+      // 2. Update default style template SYNCHRONOUSLY
+      const overlayName = liveOverlay?.name
+      if (overlayName) {
+        setDefaultForOverlay(overlayName, properties)
+      }
+
+      // 3. Persist to storage ASYNC
       const state = await loadState()
       state.overlays = state.overlays.map((overlay) => {
         if (overlay.id === id) {
@@ -326,13 +399,10 @@ export function useChartState(options: UseChartStateOptions = {}) {
         }
         return overlay
       })
-      await saveState(state)
-
-      const chartInstance = store.instanceApi()
-      const overlay = chartInstance?.getOverlays({ id })[0]
-      if (overlay && 'setProperties' in overlay) {
-        ;(overlay as ProOverlay).setProperties(properties, id)
+      if (overlayName) {
+        state.overlayDefaults = { ...state.overlayDefaults, [overlayName]: getDefaultForOverlay(overlayName) }
       }
+      await saveState(state)
     },
     [loadState, saveState]
   )
@@ -478,6 +548,11 @@ export function useChartState(options: UseChartStateOptions = {}) {
         store.setMainIndicators(newMainIndicators)
         store.setSubIndicators(newSubIndicators)
       }, 500)
+    }
+
+    // Restore overlay default style templates
+    if (state.overlayDefaults && Object.keys(state.overlayDefaults).length > 0) {
+      setOverlayDefaults(state.overlayDefaults)
     }
 
     // Restore styles
