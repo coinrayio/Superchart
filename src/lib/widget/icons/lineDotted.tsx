@@ -1,0 +1,5 @@
+export default () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" fill="currentColor">
+    <path fill="currentColor" d="M3 13h2v2H3v-2Zm5 0h2v2H8v-2Zm7 0h-2v2h2v-2Zm3 0h2v2h-2v-2Zm7 0h-2v2h2v-2Z"></path>
+  </svg>
+)
