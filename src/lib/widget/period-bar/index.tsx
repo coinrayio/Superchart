@@ -2,7 +2,7 @@
  * Period Bar Widget
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { isString } from 'lodash'
 import i18n from '../../i18n'
 import { getScreenSize } from '../../helpers'

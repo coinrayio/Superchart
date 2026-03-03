@@ -63,6 +63,39 @@ function App() {
 
     chartRef.current = chart
 
+    // Sample toolbar button — alerts the current symbol
+    chart.createButton({
+      text: 'Alert',
+      tooltip: 'Create a price alert',
+      icon: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a5.5 5.5 0 0 0-5.5 5.5v2.086l-.707.707A1 1 0 0 0 2.5 11H5a3 3 0 0 0 6 0h2.5a1 1 0 0 0 .707-1.707l-.707-.707V6.5A5.5 5.5 0 0 0 8 1zm0 13a2 2 0 0 1-1.995-1.85L6 12h4l-.005.15A2 2 0 0 1 8 14z"/></svg>',
+      onClick: () => alert(`Price alert set for ${chart.getSymbol().ticker}`),
+    })
+
+    // Sample toolbar dropdown — switch chart type
+    chart.createDropdown({
+      text: 'Chart Type',
+      tooltip: 'Change chart style',
+      items: [
+        {
+          text: 'Candlestick',
+          onClick: () => chart.getChart()?.setStyles({ candle: { type: 'candle_solid' as never } }),
+        },
+        {
+          text: 'Hollow Candle',
+          onClick: () => chart.getChart()?.setStyles({ candle: { type: 'candle_stroke' as never } }),
+        },
+        {
+          text: 'Heikin-Ashi',
+          onClick: () => chart.getChart()?.setStyles({ candle: { type: 'heikin_ashi' as never } }),
+        },
+        { type: 'separator' },
+        {
+          text: 'Line',
+          onClick: () => chart.getChart()?.setStyles({ candle: { type: 'area' as never } }),
+        },
+      ],
+    })
+
     // Cleanup on unmount
     return () => {
       chart.dispose()

@@ -215,6 +215,8 @@ export default class Superchart implements SuperchartApi {
   private _root: Nullable<Root> = null
   private _api: Nullable<SuperchartApi> = null
   private _options: SuperchartOptions
+  /** Calls queued before React has finished mounting and the API is ready */
+  private _pendingToolbarCalls: Array<() => void> = []
 
   constructor(options: SuperchartOptions) {
     // Resolve container
@@ -272,6 +274,9 @@ export default class Superchart implements SuperchartApi {
       createElement(SuperchartComponent, {
         onApiReady: (api: SuperchartApi) => {
           this._api = api
+          // Replay any createButton / createDropdown calls made before React was ready
+          for (const fn of this._pendingToolbarCalls) fn()
+          this._pendingToolbarCalls = []
         },
         dataLoader: options.dataLoader,
         watermark: options.watermark,
@@ -371,11 +376,17 @@ export default class Superchart implements SuperchartApi {
   }
 
   createButton(options?: ToolbarButtonOptions): HTMLElement {
-    return this._api?.createButton(options) ?? document.createElement('button')
+    if (this._api) return this._api.createButton(options)
+    // API not ready yet (React still mounting) — queue the call
+    this._pendingToolbarCalls.push(() => this._api?.createButton(options))
+    return document.createElement('button')
   }
 
   createDropdown(options: ToolbarDropdownOptions): HTMLElement {
-    return this._api?.createDropdown(options) ?? document.createElement('div')
+    if (this._api) return this._api.createDropdown(options)
+    // API not ready yet (React still mounting) — queue the call
+    this._pendingToolbarCalls.push(() => this._api?.createDropdown(options))
+    return document.createElement('div')
   }
 
   /**
@@ -409,6 +420,7 @@ export default class Superchart implements SuperchartApi {
     store.resetStore()
 
     this._api = null
+    this._pendingToolbarCalls = []
   }
 
   /**
