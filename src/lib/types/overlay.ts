@@ -19,6 +19,7 @@ export type {
   OverlayProperties,
   ProOverlayTemplate,
   OverlayPropertiesStore,
+  FigureLevel,
   OrderLineProperties,
   OrderLine,
   OrderLineStyle,
@@ -33,7 +34,81 @@ export {
   DEFAULT_OVERLAY_PROPERTIES,
 } from 'klinecharts'
 
-import type { DeepPartial, Point, OverlayProperties, Overlay, OverlayCreate } from 'klinecharts'
+import type { DeepPartial, Point, OverlayProperties, Overlay, OverlayCreate, PeriodType } from 'klinecharts'
+
+// ── Timeframe visibility ──
+
+/** Period categories for visibility rules (excludes 'year' since charts rarely use it) */
+export type PeriodCategory = Exclude<PeriodType, 'year'>
+
+export const PERIOD_CATEGORIES: PeriodCategory[] = ['second', 'minute', 'hour', 'day', 'week', 'month']
+
+/** Available span values per period category (common trading timeframes) */
+export const TIMEFRAME_SPANS: Record<PeriodCategory, number[]> = {
+  second: [1, 5, 10, 15, 30, 45],
+  minute: [1, 2, 3, 5, 10, 15, 30, 45],
+  hour: [1, 2, 3, 4],
+  day: [1, 2, 3],
+  week: [1],
+  month: [1, 2, 3, 6, 12],
+}
+
+/** Category display labels */
+export const PERIOD_CATEGORY_LABELS: Record<PeriodCategory, string> = {
+  second: 'Seconds',
+  minute: 'Minutes',
+  hour: 'Hours',
+  day: 'Days',
+  week: 'Weeks',
+  month: 'Months',
+}
+
+/** Suffix for formatting span display (e.g., 1s, 5m, 1D) */
+const PERIOD_SUFFIXES: Record<PeriodCategory, string> = {
+  second: 's', minute: 'm', hour: 'h', day: 'D', week: 'W', month: 'M',
+}
+
+export function formatSpan(category: PeriodCategory, span: number): string {
+  return `${span}${PERIOD_SUFFIXES[category]}`
+}
+
+export interface TimeframeVisibilityRule {
+  enabled: boolean
+  from: number
+  to: number
+}
+
+export interface TimeframeVisibility {
+  showOnAll: boolean
+  rules: Record<PeriodCategory, TimeframeVisibilityRule>
+}
+
+export function defaultTimeframeVisibility(): TimeframeVisibility {
+  return {
+    showOnAll: true,
+    rules: {
+      second: { enabled: true, from: 1, to: 45 },
+      minute: { enabled: true, from: 1, to: 45 },
+      hour: { enabled: true, from: 1, to: 4 },
+      day: { enabled: true, from: 1, to: 3 },
+      week: { enabled: true, from: 1, to: 1 },
+      month: { enabled: true, from: 1, to: 12 },
+    },
+  }
+}
+
+/** Check if an overlay should be visible for the given period */
+export function isOverlayVisibleForPeriod(
+  visibility: TimeframeVisibility | undefined,
+  period: { type: string; span: number }
+): boolean {
+  if (!visibility || visibility.showOnAll) return true
+  const category = period.type as PeriodCategory
+  if (!(category in visibility.rules)) return true // unknown category = visible
+  const rule = visibility.rules[category]
+  if (!rule || !rule.enabled) return false
+  return period.span >= rule.from && period.span <= rule.to
+}
 
 /**
  * ProOverlay - An overlay with property management methods
@@ -71,12 +146,14 @@ export interface SavedOverlay {
   groupId?: string
   points: SavedOverlayPoint[]
   properties?: DeepPartial<OverlayProperties>
+  figureStyles?: Record<string, Record<string, unknown>>
   lock: boolean
   visible: boolean
   extendLeft?: boolean
   extendRight?: boolean
   mode?: import('klinecharts').OverlayMode
   extendData?: unknown
+  timeframeVisibility?: TimeframeVisibility
 }
 
 /**

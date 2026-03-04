@@ -23,6 +23,7 @@ import {
   getStrokeKeys,
   getLineStylePreset,
   LINE_STYLE_PRESETS,
+  WIDTH_PX_OPTIONS,
   type LineStylePreset,
 } from '../overlay/overlayPropertySchemas'
 
@@ -39,7 +40,7 @@ function useStoreValue<T>(
   return useSyncExternalStore(subscribe, getValue, getValue)
 }
 
-// Inline SVG for line width icons — each shows a line of the given pixel thickness
+// Inline SVG for the toolbar button — shows the current line thickness
 function WidthIcon({ px }: { px: number }) {
   const h = Math.max(1, px)
   const y = (28 - h) / 2
@@ -49,8 +50,6 @@ function WidthIcon({ px }: { px: number }) {
     </svg>
   )
 }
-
-const WIDTH_OPTIONS = [1, 2, 3, 4]
 
 const STYLE_OPTIONS: { key: LineStylePreset; icon: string }[] = [
   { key: 'solid', icon: 'line' },
@@ -248,7 +247,7 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
           </div>
         )}
 
-        {/* Stroke width — icon-based selector */}
+        {/* Stroke width — line-preview dropdown */}
         {hasStroke && (
           <div className="cr-action" title="Line width">
             <div
@@ -259,7 +258,7 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
             </div>
             {visibleEditorKey === 'width' && (
               <div className="cr-editor cr-width-editor" onClick={(e) => e.stopPropagation()}>
-                {WIDTH_OPTIONS.map(px => (
+                {WIDTH_PX_OPTIONS.map((px: number) => (
                   <div
                     key={px}
                     className={`cr-width-option ${strokeWidth === px ? 'active' : ''}`}
@@ -269,7 +268,10 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
                       setVisibleEditorKey(null)
                     }}
                   >
-                    <WidthIcon px={px} />
+                    <svg width="40" height="14" style={{ flexShrink: 0 }}>
+                      <line x1="0" y1="7" x2="40" y2="7" stroke="currentColor" strokeWidth={px} />
+                    </svg>
+                    <span className="cr-width-label">{px}px</span>
                   </div>
                 ))}
               </div>

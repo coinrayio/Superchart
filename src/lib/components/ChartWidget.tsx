@@ -20,6 +20,8 @@ import {
 import * as store from '../store/chartStore'
 import { useChartState } from '../hooks/useChartState'
 import { useBackendIndicators, type UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
+import { getAllOverlayTimeframeVisibility } from '../store/overlaySettingStore'
+import { isOverlayVisibleForPeriod } from '../types/overlay'
 import type { Period, SymbolInfo } from '../types/chart'
 
 export interface ChartWidgetProps {
@@ -360,6 +362,15 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
       // Check if period changed
       if (prev.period?.span !== period.span || prev.period?.type !== period.type) {
         chart.setPeriod(period)
+
+        // Apply timeframe visibility filtering to all overlays
+        const visibilityMap = getAllOverlayTimeframeVisibility()
+        if (visibilityMap.size > 0) {
+          visibilityMap.forEach((visibility, overlayId) => {
+            const shouldBeVisible = isOverlayVisibleForPeriod(visibility, period)
+            chart.overrideOverlay({ id: overlayId, visible: shouldBeVisible })
+          })
+        }
       }
 
       // Check if symbol changed

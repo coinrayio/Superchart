@@ -92,7 +92,7 @@
         }
       }
 
-      // Width editor: icon-based selector
+      // Width editor: line-preview dropdown
       .cr-width-editor {
         display: flex;
         flex-direction: column;
@@ -102,8 +102,9 @@
         .cr-width-option {
           display: flex;
           align-items: center;
-          justify-content: center;
-          width: 36px;
+          gap: 8px;
+          padding: 4px 8px;
+          min-width: 90px;
           height: 28px;
           border-radius: 4px;
           cursor: pointer;
@@ -113,6 +114,11 @@
           &.active {
             background: var(--superchart-primary-color, #2962FF);
             color: #fff;
+          }
+
+          .cr-width-label {
+            font-size: 11px;
+            white-space: nowrap;
           }
         }
       }

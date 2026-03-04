@@ -36,24 +36,50 @@ export function Input({
   onKeyDown,
 }: InputProps) {
   const [status, setStatus] = useState<'normal' | 'focus'>('normal')
+  // Internal editing state: non-null while focused, holds intermediate string.
+  // This decouples the displayed value from the parent prop during editing,
+  // so handlers that only accept numbers (on blur) don't block typing.
+  const [editValue, setEditValue] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const displayValue = editValue !== null ? editValue : value
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
     if (precision !== undefined) {
       const decimalDigit = Math.max(0, Math.floor(precision))
+      // Allow intermediate editing states: empty, minus sign, trailing decimal
       let reg: RegExp
       if (decimalDigit <= 0) {
-        reg = /^[1-9]\d*$/
+        reg = min < 0 ? /^-?\d*$/ : /^\d*$/
       } else {
-        reg = new RegExp(`^\\d+\\.?\\d{0,${decimalDigit}}$`)
+        reg = min < 0
+          ? new RegExp(`^-?\\d*\\.?\\d{0,${decimalDigit}}$`)
+          : new RegExp(`^\\d*\\.?\\d{0,${decimalDigit}}$`)
       }
-      if (v === '' || (reg.test(v) && +v >= min && +v <= max)) {
-        onChange?.(v === '' ? v : +v)
+      if (reg.test(v)) {
+        setEditValue(v)
+        onChange?.(v)
       }
     } else {
+      setEditValue(v)
       onChange?.(v)
     }
+  }
+
+  const handleBlur = () => {
+    setStatus('normal')
+    if (precision !== undefined) {
+      const val = editValue !== null ? editValue : value
+      const num = Number(val)
+      if (val === '' || val === '-' || isNaN(num)) {
+        onChange?.(min > 0 ? min : 0)
+      } else {
+        const clamped = Math.min(max, Math.max(min, num))
+        onChange?.(+clamped.toFixed(Math.max(0, Math.floor(precision))))
+      }
+    }
+    setEditValue(null)
   }
 
   return (
@@ -68,11 +94,11 @@ export function Input({
         ref={inputRef}
         className="value"
         placeholder={placeholder}
-        value={value}
+        value={displayValue}
         disabled={disabled}
         autoFocus={autoFocus}
-        onFocus={() => setStatus('focus')}
-        onBlur={() => setStatus('normal')}
+        onFocus={() => { setStatus('focus'); setEditValue(String(value)) }}
+        onBlur={handleBlur}
         onChange={handleChange}
         onKeyDown={onKeyDown}
       />
