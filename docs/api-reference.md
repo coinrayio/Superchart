@@ -86,6 +86,17 @@ export interface SuperchartOptions {
    * Defaults to: 1m, 5m, 15m, 1H, 2H, 4H, D, W, M
    */
   periods?: Period[]
+
+  // ---- Event Callbacks ----
+
+  /** Called when the symbol changes (from UI or API) */
+  onSymbolChange?: (symbol: SymbolInfo) => void
+
+  /** Called when the period/interval changes (from UI or API) */
+  onPeriodChange?: (period: Period) => void
+
+  /** Called when the visible range changes (scroll, zoom, data load) */
+  onVisibleRangeChange?: (range: VisibleTimeRange) => void
 }
 ```
 
@@ -180,12 +191,93 @@ export interface SuperchartApi {
    */
   setOverlayMode(mode: OverlayMode): void
 
+  // ---- Event Subscriptions ----
+
+  /**
+   * Subscribe to symbol changes. Returns an unsubscribe function.
+   * Fires for both UI-initiated and API-initiated changes.
+   */
+  onSymbolChange(callback: (symbol: SymbolInfo) => void): () => void
+
+  /**
+   * Subscribe to period/interval changes. Returns an unsubscribe function.
+   * Fires for both UI-initiated and API-initiated changes.
+   */
+  onPeriodChange(callback: (period: Period) => void): () => void
+
+  /**
+   * Subscribe to visible range changes (scroll, zoom, data load).
+   * Returns an unsubscribe function.
+   * Timestamps are in unix seconds.
+   */
+  onVisibleRangeChange(callback: (range: VisibleTimeRange) => void): () => void
+
   // ---- Lifecycle ----
 
   /** Unmount the chart, remove the klinecharts canvas, and reset all state. */
   dispose(): void
 }
 ```
+
+### Event Callbacks
+
+Superchart supports event callbacks for syncing your application state with chart changes. You can register callbacks in two ways:
+
+**1. Constructor options** — pass callbacks when creating the chart:
+
+```typescript
+const chart = new Superchart({
+  container: 'chart',
+  symbol, period, dataLoader,
+  onSymbolChange: (symbol) => {
+    console.log('Symbol changed to:', symbol.ticker)
+  },
+  onPeriodChange: (period) => {
+    console.log('Period changed to:', period.text)
+  },
+  onVisibleRangeChange: (range) => {
+    console.log('Visible range:', range.from, '-', range.to)
+  },
+})
+```
+
+**2. Subscription methods** — subscribe at any time, returns an unsubscribe function:
+
+```typescript
+const unsubSymbol = chart.onSymbolChange((symbol) => {
+  TradingTabsController.get()?.activeTab.setCoinraySymbol(symbol)
+})
+
+const unsubPeriod = chart.onPeriodChange((period) => {
+  TradingTabsController.get()?.activeTab.setResolution(period)
+})
+
+const unsubRange = chart.onVisibleRangeChange((range) => {
+  // range.from and range.to are unix timestamps in seconds
+  const durationSeconds = range.to - range.from
+  TradingTabsController.get()?.activeTab.setVisibleRange(range)
+})
+
+// Later: stop listening
+unsubSymbol()
+unsubPeriod()
+unsubRange()
+```
+
+Both approaches can be combined. Constructor callbacks and subscription callbacks all fire for the same events. All callbacks fire for changes initiated from the UI (e.g. clicking a period button) **and** from the API (e.g. calling `setPeriod()`). Initial values set during construction do **not** trigger callbacks.
+
+### VisibleTimeRange
+
+```typescript
+export interface VisibleTimeRange {
+  /** Unix timestamp (seconds) of the leftmost visible bar */
+  from: number
+  /** Unix timestamp (seconds) of the rightmost visible bar */
+  to: number
+}
+```
+
+Compute the visible duration in seconds: `range.to - range.from`. For example, 100 visible 1-minute candles → `6000` seconds.
 
 ### UseBackendIndicatorsReturn
 
@@ -426,4 +518,5 @@ Inverse of `resolutionToPeriod`. Converts a `Period` to a TradingView resolution
 | `ChartPreferences` | superchart | `{ showVolume, showCrosshair, showGrid, showLegend, magnetMode, timezone?, locale? }` |
 | `SettingValue` | superchart | `number \| boolean \| string` |
 | `ActiveIndicator` | superchart | Runtime indicator state (data Map, timestamps, paneId) |
+| `VisibleTimeRange` | superchart | `{ from: number, to: number }` — unix timestamps in seconds |
 | `PaneProperties` | superchart | `Styles` extended with background gradient fields |

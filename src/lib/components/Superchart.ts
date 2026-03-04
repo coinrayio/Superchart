@@ -17,6 +17,7 @@ import type {
   Styles,
   OverlayCreate,
   OverlayMode,
+  VisibleRange,
 } from 'klinecharts'
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
@@ -75,6 +76,16 @@ export interface ToolbarDropdownOptions {
   items: ToolbarDropdownItem[]
 }
 
+// ---- Event types ----
+
+/** Visible time range as unix timestamps (seconds) */
+export interface VisibleTimeRange {
+  /** Unix timestamp (seconds) of the leftmost visible bar */
+  from: number
+  /** Unix timestamp (seconds) of the rightmost visible bar */
+  to: number
+}
+
 // ---- Main option types ----
 
 export interface SuperchartOptions {
@@ -128,6 +139,14 @@ export interface SuperchartOptions {
   // Optional - Available options
   /** Available period options */
   periods?: Period[]
+
+  // Optional - Event callbacks
+  /** Called when the symbol changes (from UI or API) */
+  onSymbolChange?: (symbol: SymbolInfo) => void
+  /** Called when the period/interval changes (from UI or API) */
+  onPeriodChange?: (period: Period) => void
+  /** Called when the visible range changes (scroll, zoom, data load) */
+  onVisibleRangeChange?: (range: VisibleTimeRange) => void
 }
 
 export interface SuperchartApi {
@@ -186,6 +205,12 @@ export interface SuperchartApi {
    * Returns the trigger HTMLElement. The dropdown list is managed internally (pure DOM, no React).
    */
   createDropdown: (options: ToolbarDropdownOptions) => HTMLElement
+  /** Subscribe to symbol changes. Returns unsubscribe function. */
+  onSymbolChange: (callback: (symbol: SymbolInfo) => void) => () => void
+  /** Subscribe to period changes. Returns unsubscribe function. */
+  onPeriodChange: (callback: (period: Period) => void) => () => void
+  /** Subscribe to visible range changes. Returns unsubscribe function. */
+  onVisibleRangeChange: (callback: (range: VisibleTimeRange) => void) => () => void
   /** Dispose the chart */
   dispose: () => void
 }
@@ -217,6 +242,16 @@ export default class Superchart implements SuperchartApi {
   private _options: SuperchartOptions
   /** Calls queued before React has finished mounting and the API is ready */
   private _pendingToolbarCalls: Array<() => void> = []
+  /** Event listeners for symbol/period/visible-range changes */
+  private _listeners = {
+    symbolChange: new Set<(symbol: SymbolInfo) => void>(),
+    periodChange: new Set<(period: Period) => void>(),
+    visibleRangeChange: new Set<(range: VisibleTimeRange) => void>(),
+  }
+  /** Cleanup functions for store/chart subscriptions */
+  private _unsubscribers: Array<() => void> = []
+  /** Set to true after constructor finishes store init, to avoid firing callbacks for initial values */
+  private _initialized = false
 
   constructor(options: SuperchartOptions) {
     // Resolve container
@@ -277,6 +312,26 @@ export default class Superchart implements SuperchartApi {
           // Replay any createButton / createDropdown calls made before React was ready
           for (const fn of this._pendingToolbarCalls) fn()
           this._pendingToolbarCalls = []
+
+          // Subscribe to visible range changes from the underlying chart
+          const chart = api.getChart()
+          if (chart) {
+            const handler = (range: VisibleRange): void => {
+              if (this._listeners.visibleRangeChange.size === 0) return
+              const dataList = chart.getDataList()
+              const fromTs = dataList[range.realFrom]?.timestamp ?? 0
+              const toTs = dataList[range.realTo]?.timestamp ?? 0
+              if (fromTs > 0 && toTs > 0) {
+                const timeRange: VisibleTimeRange = {
+                  from: Math.floor(fromTs / 1000),
+                  to: Math.floor(toTs / 1000),
+                }
+                this._listeners.visibleRangeChange.forEach(cb => cb(timeRange))
+              }
+            }
+            chart.subscribeAction('onVisibleRangeChange', handler)
+            this._unsubscribers.push(() => chart.unsubscribeAction('onVisibleRangeChange', handler))
+          }
         },
         dataLoader: options.dataLoader,
         watermark: options.watermark,
@@ -287,6 +342,25 @@ export default class Superchart implements SuperchartApi {
         className: '',
       })
     )
+
+    // Register constructor-provided callbacks
+    if (options.onSymbolChange) this._listeners.symbolChange.add(options.onSymbolChange)
+    if (options.onPeriodChange) this._listeners.periodChange.add(options.onPeriodChange)
+    if (options.onVisibleRangeChange) this._listeners.visibleRangeChange.add(options.onVisibleRangeChange)
+
+    // Subscribe to store signals for symbol/period changes
+    // Set _initialized after store init so initial values don't fire callbacks
+    this._initialized = true
+
+    this._unsubscribers.push(store.subscribeSymbol((sym) => {
+      if (!this._initialized || sym == null) return
+      this._listeners.symbolChange.forEach(cb => cb(sym))
+    }))
+
+    this._unsubscribers.push(store.subscribePeriod((p) => {
+      if (!this._initialized || p == null) return
+      this._listeners.periodChange.forEach(cb => cb(p as Period))
+    }))
   }
 
   // Proxy methods to internal API
@@ -389,10 +463,33 @@ export default class Superchart implements SuperchartApi {
     return document.createElement('div')
   }
 
+  onSymbolChange(callback: (symbol: SymbolInfo) => void): () => void {
+    this._listeners.symbolChange.add(callback)
+    return () => { this._listeners.symbolChange.delete(callback) }
+  }
+
+  onPeriodChange(callback: (period: Period) => void): () => void {
+    this._listeners.periodChange.add(callback)
+    return () => { this._listeners.periodChange.delete(callback) }
+  }
+
+  onVisibleRangeChange(callback: (range: VisibleTimeRange) => void): () => void {
+    this._listeners.visibleRangeChange.add(callback)
+    return () => { this._listeners.visibleRangeChange.delete(callback) }
+  }
+
   /**
    * Dispose the chart and cleanup resources
    */
   dispose(): void {
+    // Clean up all event subscriptions
+    for (const unsub of this._unsubscribers) unsub()
+    this._unsubscribers = []
+    this._listeners.symbolChange.clear()
+    this._listeners.periodChange.clear()
+    this._listeners.visibleRangeChange.clear()
+    this._initialized = false
+
     // Dispose providers before unmounting
     const provider = store.indicatorProvider()
     if (provider?.dispose) {

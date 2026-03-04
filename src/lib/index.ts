@@ -29,6 +29,7 @@ export { DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
 export type {
   SuperchartOptions,
   SuperchartApi,
+  VisibleTimeRange,
   ToolbarButtonOptions,
   ToolbarDropdownOptions,
   ToolbarDropdownItem,

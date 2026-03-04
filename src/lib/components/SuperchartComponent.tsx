@@ -437,6 +437,11 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
         container?.appendChild(trigger)
         return trigger
       },
+      // Event subscription methods are handled by the Superchart class directly,
+      // not proxied through the internal API. These stubs satisfy the interface.
+      onSymbolChange: () => () => {},
+      onPeriodChange: () => () => {},
+      onVisibleRangeChange: () => () => {},
       dispose: () => {},
     }
 

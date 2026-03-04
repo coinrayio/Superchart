@@ -287,6 +287,83 @@ export interface OrderLineStyle {
 
 ---
 
+## Extend Left / Right
+
+Certain line-based overlays can extend their lines to the edges of the chart viewport. This is configured via the overlay settings modal (Style tab → Extend section) or programmatically through `extendData`.
+
+### Supported Overlays
+
+| Overlay | Description |
+|---|---|
+| `segment` | Line segment extends in one or both directions to the viewport edges |
+| `fibonacciSegment` | Fibonacci level lines extend left/right to the viewport edges |
+| `fibonacciExtension` | Extension level lines extend left/right to the viewport edges |
+
+### Programmatic Usage
+
+Set `extendData` when creating an overlay:
+
+```typescript
+chart.createOverlay({
+  name: 'segment',
+  points: [
+    { timestamp: startTs, value: 48000 },
+    { timestamp: endTs, value: 52000 },
+  ],
+  extendData: { extendLeft: true, extendRight: false },
+})
+```
+
+Or update an existing overlay via the underlying chart:
+
+```typescript
+const klineChart = chart.getChart()
+klineChart?.overrideOverlay({
+  id: overlayId,
+  extendData: { extendLeft: true, extendRight: true },
+})
+```
+
+The extend state is automatically persisted and restored via `StorageAdapter`.
+
+---
+
+## Timeframe Visibility
+
+Overlays can be configured to show or hide based on the active timeframe. This allows, for example, showing a trend line only on hourly charts and above, or hiding detailed annotations on weekly charts.
+
+### Settings Modal
+
+Double-click an overlay → **Visibility** tab:
+- **Show on All Timeframes** — master toggle (default: on)
+- Per-category rules — enable/disable each period category (seconds, minutes, hours, days, weeks, months) with from/to range selectors
+
+### How It Works
+
+- Visibility rules are stored per overlay and persisted to `StorageAdapter`
+- When the user changes the chart period, all overlays are checked against their visibility rules
+- Overlays that don't match the current period are hidden (`visible: false`); matching ones are shown
+- Rules are checked as: `period.span >= rule.from && period.span <= rule.to` within each category
+
+### TimeframeVisibility Type
+
+```typescript
+export interface TimeframeVisibility {
+  showOnAll: boolean
+  rules: Record<PeriodCategory, TimeframeVisibilityRule>
+}
+
+export interface TimeframeVisibilityRule {
+  enabled: boolean
+  from: number   // minimum span value
+  to: number     // maximum span value
+}
+
+export type PeriodCategory = 'second' | 'minute' | 'hour' | 'day' | 'week' | 'month'
+```
+
+---
+
 ## Persistence — SavedOverlay
 
 Overlays are automatically saved to `StorageAdapter` when a `storageKey` and adapter are configured. Each overlay is serialized as:
@@ -308,6 +385,8 @@ export interface SavedOverlay {
   extendRight?: boolean
   mode?: OverlayMode
   extendData?: unknown
+  /** Timeframe visibility rules (omitted when showOnAll is true) */
+  timeframeVisibility?: TimeframeVisibility
 }
 
 export interface SavedOverlayPoint {
