@@ -29,3 +29,6 @@ storybook-static
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code
+.claude/agent-memory/
