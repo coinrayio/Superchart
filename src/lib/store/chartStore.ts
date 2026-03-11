@@ -91,6 +91,9 @@ export const [timezone, setTimezone, subscribeTimezone] = createSignal<string>('
 // Screenshot URL for modal
 export const [screenshotUrl, setScreenshotUrl, subscribeScreenshotUrl] = createSignal<string>('')
 
+// Debug logging (default: false — only errors/warnings printed)
+export const [debug, setDebug, subscribeDebug] = createSignal<boolean>(true)
+
 /**
  * Reset all store values to defaults
  */
@@ -116,6 +119,7 @@ export function resetStore(): void {
   setLocale('en-US')
   setTimezone('Etc/UTC')
   setScreenshotUrl('')
+  setDebug(true)
 }
 
 /**

@@ -20,9 +20,10 @@ import type {
 import * as store from '../store/chartStore'
 import type { ChartState, SavedIndicator } from '../types/storage'
 import type { SavedOverlay, OverlayProperties, ProOverlay } from '../types/overlay'
+import { isOverlayVisibleForPeriod } from '../types/overlay'
 import { createEmptyChartState } from '../types/storage'
 import { ctrlKeyedDown } from '../store/keyEventStore'
-import { useOverlaySettings, setPopupOverlay, setShowOverlaySetting } from '../store/overlaySettingStore'
+import { useOverlaySettings, setPopupOverlay, setShowOverlaySetting, getOverlayTimeframeVisibility, setOverlayTimeframeVisibility, getAllOverlayTimeframeVisibility } from '../store/overlaySettingStore'
 import type { OverlayType } from '../store/overlaySettingStore'
 import { getDefaultForOverlay, setDefaultForOverlay, setOverlayDefaults } from '../store/overlayDefaultStyles'
 import { overlayPropertiesToKlineStyles } from '../widget/overlay/overlayPropertySchemas'
@@ -30,8 +31,8 @@ import { overlayPropertiesToKlineStyles } from '../widget/overlay/overlayPropert
 /**
  * Convert Overlay to SavedOverlay format
  */
-function overlayToSaved(overlay: Overlay, properties?: DeepPartial<OverlayProperties>): SavedOverlay {
-  return {
+function overlayToSaved(overlay: Overlay, properties?: DeepPartial<OverlayProperties>, figureStyles?: Record<string, Record<string, unknown>>): SavedOverlay {
+  const saved: SavedOverlay = {
     id: overlay.id,
     name: overlay.name,
     paneId: overlay.paneId,
@@ -41,11 +42,18 @@ function overlayToSaved(overlay: Overlay, properties?: DeepPartial<OverlayProper
       value: p.value ?? 0,
     })),
     properties,
+    figureStyles,
     lock: overlay.lock,
     visible: overlay.visible,
     mode: overlay.mode,
     extendData: overlay.extendData,
   }
+  // Persist timeframe visibility if configured
+  const tfVisibility = getOverlayTimeframeVisibility(overlay.id)
+  if (tfVisibility && !tfVisibility.showOnAll) {
+    saved.timeframeVisibility = tfVisibility
+  }
+  return saved
 }
 
 /**
@@ -228,6 +236,8 @@ export function useChartState(options: UseChartStateOptions = {}) {
       await saveState(state)
 
       store.instanceApi()?.removeOverlay({ id })
+      // Clear selection so floating settings hides
+      store.setSelectedOverlay(null)
     },
     [loadState, saveState]
   )
@@ -408,6 +418,31 @@ export function useChartState(options: UseChartStateOptions = {}) {
   )
 
   /**
+   * Modify overlay figureStyles (per-figure color overrides for structural overlays).
+   * Applies visually via overrideOverlay and persists to storage.
+   */
+  const modifyOverlayFigureStyles = useCallback(
+    async (id: string, figureStyles: Record<string, Record<string, unknown>>): Promise<void> => {
+      // Apply visual change synchronously
+      store.instanceApi()?.overrideOverlay({ id, figureStyles })
+
+      // Persist to storage
+      const state = await loadState()
+      state.overlays = state.overlays.map((overlay) => {
+        if (overlay.id === id) {
+          return {
+            ...overlay,
+            figureStyles: { ...overlay.figureStyles, ...figureStyles },
+          }
+        }
+        return overlay
+      })
+      await saveState(state)
+    },
+    [loadState, saveState]
+  )
+
+  /**
    * Remove indicator
    */
   const popIndicator = useCallback(
@@ -499,7 +534,7 @@ export function useChartState(options: UseChartStateOptions = {}) {
     // Restore overlays
     if (state.overlays.length > 0) {
       for (const overlay of state.overlays) {
-        pushOverlay(
+        const id = pushOverlay(
           {
             name: overlay.name,
             id: overlay.id,
@@ -517,6 +552,24 @@ export function useChartState(options: UseChartStateOptions = {}) {
           overlay.paneId,
           true // redrawing = true
         )
+        // Restore saved figureStyles (per-figure color overrides)
+        if (id && overlay.figureStyles && Object.keys(overlay.figureStyles).length > 0) {
+          chartInstance.overrideOverlay({ id, figureStyles: overlay.figureStyles })
+        }
+        // Restore timeframe visibility to runtime store
+        if (id && overlay.timeframeVisibility) {
+          setOverlayTimeframeVisibility(id, overlay.timeframeVisibility)
+        }
+      }
+
+      // Apply timeframe visibility filtering for the current period
+      const currentPeriod = store.period()
+      if (currentPeriod) {
+        const visibilityMap = getAllOverlayTimeframeVisibility()
+        visibilityMap.forEach((visibility, overlayId) => {
+          const shouldBeVisible = isOverlayVisibleForPeriod(visibility, currentPeriod)
+          chartInstance.overrideOverlay({ id: overlayId, visible: shouldBeVisible })
+        })
       }
     }
 
@@ -588,6 +641,7 @@ export function useChartState(options: UseChartStateOptions = {}) {
     syncOverlay,
     modifyOverlay,
     modifyOverlayProperties,
+    modifyOverlayFigureStyles,
     popOverlay,
 
     // State management

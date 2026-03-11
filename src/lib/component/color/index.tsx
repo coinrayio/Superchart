@@ -2,7 +2,7 @@
  * Color Picker Component
  */
 
-import { useState, type CSSProperties, type ReactNode, type PointerEvent } from 'react'
+import { useState, useRef, useEffect, useCallback, type CSSProperties, type ReactNode, type PointerEvent } from 'react'
 import chroma from 'chroma-js'
 
 export interface ColorProps {
@@ -142,6 +142,22 @@ export function Color({
   const [opacity, setOpacity] = useState(initialOpacity)
   const [selectedColor, setSelectedColor] = useState<ReactNode>(value)
   const [finalColor, setFinalColor] = useState<ReactNode>(value)
+  // Track the color when the picker was opened, so cancel can revert
+  const [originalColor, setOriginalColor] = useState<ReactNode>(value)
+  const triggerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+
+  // Sync internal state when value prop changes from outside (e.g., different overlay selected)
+  useEffect(() => {
+    if (open) return // Don't override while user is actively picking
+    setSelectedColor(value)
+    setFinalColor(value)
+    const newOpacity = String(value).includes('rgba')
+      ? chroma(String(value)).alpha() * 100
+      : 100
+    setOpacity(newOpacity)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Custom picker state
   const [customMode, setCustomMode] = useState(false)
@@ -153,6 +169,44 @@ export function Color({
 
   // Colors that can be mutated for custom palette
   const [colors] = useState(COLOR_PALETTE.map((row) => [...row]))
+
+  // Compute dropdown position clamped to viewport
+  const computeDropdownPos = useCallback(() => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const dropW = 280
+    const dropH = 380
+    let top = rect.bottom + 4
+    let left = rect.left
+    // Clamp to viewport
+    if (top + dropH > window.innerHeight) {
+      top = Math.max(4, rect.top - dropH - 4)
+    }
+    if (left + dropW > window.innerWidth) {
+      left = Math.max(4, window.innerWidth - dropW - 4)
+    }
+    if (left < 4) left = 4
+    setDropdownPos({ top, left })
+  }, [])
+
+  const openPicker = () => {
+    setOriginalColor(finalColor)
+    setOpen(true)
+    // Defer position calc so DOM is ready
+    requestAnimationFrame(computeDropdownPos)
+  }
+
+  // Recalculate position on scroll/resize while open
+  useEffect(() => {
+    if (!open) return
+    const recalc = () => computeDropdownPos()
+    window.addEventListener('scroll', recalc, true)
+    window.addEventListener('resize', recalc)
+    return () => {
+      window.removeEventListener('scroll', recalc, true)
+      window.removeEventListener('resize', recalc)
+    }
+  }, [open, computeDropdownPos])
 
   // Initialize picker from a color
   const initPickerFromColor = (input: string) => {
@@ -171,9 +225,9 @@ export function Color({
   }
 
   const cancelColorChange = () => {
-    setSelectedColor(value)
-    setFinalColor(value)
-    onChange?.(value as string)
+    setSelectedColor(originalColor)
+    setFinalColor(originalColor)
+    onChange?.(originalColor as string)
     closeColorPalette()
   }
 
@@ -271,15 +325,16 @@ export function Color({
 
   return (
     <div
+      ref={triggerRef}
       style={{ width: 120, backgroundColor: finalColor as string }}
       className={`superchart-color ${className ?? ''} ${open ? 'superchart-color-show' : ''}`}
       tabIndex={0}
     >
-      <div className="selector-container" onClick={() => setOpen(true)}>
+      <div className="selector-container" onClick={openPicker}>
         <i className="arrow" />
       </div>
 
-      <div className="drop-down-container" style={{ left: '50%', top: '20%' }}>
+      <div ref={dropdownRef} className="drop-down-container" style={dropdownPos ? { position: 'fixed', left: dropdownPos.left, top: dropdownPos.top } : { left: '50%', top: '20%' }}>
         {/* Color palette */}
         {!customMode &&
           colors.map((row, rowIndex) => (
@@ -311,21 +366,16 @@ export function Color({
                 justifyContent: 'center',
                 background: 'rgba(255,255,255,0.04)',
                 cursor: 'pointer',
+                color: 'var(--superchart-text-color, #fff)',
               }}
               onClick={(e) => {
                 e.stopPropagation()
                 openCustomPicker()
               }}
             >
-              <span
-                style={{
-                  fontSize: 18,
-                  lineHeight: 1,
-                  color: 'var(--superchart-text-color, #fff)',
-                }}
-              >
-                +
-              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="18" height="18" fill="currentColor">
+                <path d="M7 13h7V6h1v7h7v1h-7v7h-1v-7H7v-1z" />
+              </svg>
             </div>
           </div>
         )}

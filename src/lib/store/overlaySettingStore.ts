@@ -6,6 +6,7 @@
 
 import type { Overlay, OverlayEvent } from 'klinecharts'
 import { getScreenSize } from '../helpers'
+import type { TimeframeVisibility } from '../types/overlay'
 
 // Simple observable store implementation
 type Listener<T> = (value: T) => void
@@ -114,6 +115,27 @@ export function closeAllSettingPanels(): void {
   setShowSellSetting(false)
   setShowTpSetting(false)
   setShowSlSetting(false)
+}
+
+// ── Overlay Timeframe Visibility Store (runtime) ──
+// Keeps visibility configs in-memory for fast access during period changes
+
+const visibilityMap = new Map<string, TimeframeVisibility>()
+
+export function getOverlayTimeframeVisibility(id: string): TimeframeVisibility | undefined {
+  return visibilityMap.get(id)
+}
+
+export function setOverlayTimeframeVisibility(id: string, visibility: TimeframeVisibility): void {
+  visibilityMap.set(id, visibility)
+}
+
+export function deleteOverlayTimeframeVisibility(id: string): void {
+  visibilityMap.delete(id)
+}
+
+export function getAllOverlayTimeframeVisibility(): Map<string, TimeframeVisibility> {
+  return visibilityMap
 }
 
 /**

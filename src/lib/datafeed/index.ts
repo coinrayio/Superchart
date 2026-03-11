@@ -15,6 +15,7 @@ import type {
 } from '../types/datafeed'
 import { periodToResolution } from '../types/datafeed'
 import * as store from '../store/chartStore'
+import { log } from '../utils/log'
 
 /** Default number of bars to request per page */
 const DEFAULT_COUNT_BACK = 500
@@ -175,7 +176,7 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       const { type, timestamp, symbol, period, callback } = params
       const resolution = periodToResolution(period)
 
-      console.log('[DataLoader] getBars called:', { type, ticker: symbol.ticker, resolution, timestamp })
+      log('[DataLoader] getBars called:', { type, ticker: symbol.ticker, resolution, timestamp })
 
       // Forward loading not supported - historical charts only load backwards
       if (type === 'backward') {
@@ -206,7 +207,7 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
         const to = Math.floor(toMs / 1000)
         const from = Math.floor(fromMs / 1000)
 
-        console.log('[DataLoader] getBars request:', {
+        log('[DataLoader] getBars request:', {
           type,
           ticker: symbol.ticker,
           resolution,
@@ -228,7 +229,7 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
           (bars, meta) => {
             const klineData = bars.map(barToKLineData)
             const hasMore = !(meta?.noData ?? false)
-            console.log('[DataLoader] getBars response:', {
+            log('[DataLoader] getBars response:', {
               type,
               barsCount: bars.length,
               meta,

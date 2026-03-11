@@ -7,7 +7,8 @@ Superchart is a TradingView-style charting library built on [klinecharts](https:
 - **Real-time OHLCV charts** — candlestick, bar, line, area, and Heikin-Ashi candle types via klinecharts.
 - **Backend-driven indicators** — Superchart never calculates indicators itself. It receives pre-calculated data from your backend via `IndicatorProvider` and renders it using a calc-bridge pattern registered as klinecharts `IndicatorTemplate`s.
 - **Server-side Pine Script execution** — an optional `ScriptProvider` interface allows users to write Pine Script (or any custom language) in the built-in code editor and execute it as a chart indicator via your backend.
-- **25+ drawing tools** — trend lines, rays, channels, Fibonacci retracements, shapes, wave counts, Gann boxes, annotations, and order lines.
+- **Event callbacks** — `onSymbolChange`, `onPeriodChange`, and `onVisibleRangeChange` for syncing app state with chart changes. Available as constructor options or subscription methods.
+- **25+ drawing tools** — trend lines, rays, channels, Fibonacci retracements, shapes, wave counts, Gann boxes, annotations, and order lines. Supports extend left/right and per-timeframe visibility rules.
 - **Order lines** — horizontal price-level overlays used to visualize open orders on the chart.
 - **Persistent state** — `StorageAdapter` interface saves and restores indicator subscriptions, overlay drawings, styles, and preferences per symbol.
 - **Themes** — `'light'` and `'dark'` built-ins; fine-grained overrides via `styleOverrides: DeepPartial<Styles>`.

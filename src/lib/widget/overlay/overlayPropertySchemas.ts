@@ -9,12 +9,16 @@
  * renders shapes as PolygonStyle with border* properties.
  */
 
-import type { OverlayProperties } from 'klinecharts'
+import type { OverlayProperties, FigureLevel } from 'klinecharts'
+import {
+  FIBONACCI_RETRACEMENT_LEVELS, FIBONACCI_EXTENSION_LEVELS,
+  FIBONACCI_CIRCLE_LEVELS, FIBONACCI_FAN_LEVELS
+} from 'klinecharts'
 
 export interface PropertyFieldSchema {
   key: keyof OverlayProperties
   label: string
-  editor: 'color' | 'number' | 'select' | 'dashedValue'
+  editor: 'color' | 'number' | 'select' | 'dashedValue' | 'widthPx' | 'fontSize' | 'text'
   options?: string[]
   min?: number
   max?: number
@@ -26,8 +30,31 @@ export interface PropertySection {
   fields: PropertyFieldSchema[]
 }
 
+/**
+ * Per-figure field for structural overlays (fixed parts with per-figure color overrides).
+ * Each field maps to a figure key in the overlay's createPointFigures output.
+ */
+export interface FigureFieldSchema {
+  key: string
+  label: string
+  figureType: 'line' | 'circle' | 'arc' | 'polygon'
+}
+
+/**
+ * Level configuration for level-based overlays (fibonacci, etc.).
+ * Supports dynamic, configurable levels with per-level colors.
+ */
+export interface LevelSchemaConfig {
+  defaultLevels: FigureLevel[]
+  figureType: 'line' | 'circle' | 'arc'
+  keyPrefix: string
+  maxLevels: number
+}
+
 export interface OverlayPropertySchema {
   sections: PropertySection[]
+  figureFields?: FigureFieldSchema[]
+  levelConfig?: LevelSchemaConfig
 }
 
 /**
@@ -50,7 +77,7 @@ const lineColorField: PropertyFieldSchema = {
 }
 
 const lineWidthField: PropertyFieldSchema = {
-  key: 'lineWidth', label: 'Width', editor: 'number', min: 1, max: 10, step: 1,
+  key: 'lineWidth', label: 'Width', editor: 'widthPx', min: 1, max: 8,
 }
 
 const lineStyleField: PropertyFieldSchema = {
@@ -74,7 +101,7 @@ const borderColorField: PropertyFieldSchema = {
 }
 
 const borderWidthField: PropertyFieldSchema = {
-  key: 'borderWidth', label: 'Width', editor: 'number', min: 0, max: 10, step: 1,
+  key: 'borderWidth', label: 'Width', editor: 'widthPx', min: 1, max: 8,
 }
 
 const borderStyleField: PropertyFieldSchema = {
@@ -86,7 +113,7 @@ const textColorField: PropertyFieldSchema = {
 }
 
 const textFontSizeField: PropertyFieldSchema = {
-  key: 'textFontSize', label: 'Font size', editor: 'number', min: 8, max: 48, step: 1,
+  key: 'textFontSize', label: 'Font size', editor: 'fontSize',
 }
 
 const textBackgroundColorField: PropertyFieldSchema = {
@@ -101,6 +128,10 @@ const textFontField: PropertyFieldSchema = {
 const textFontWeightField: PropertyFieldSchema = {
   key: 'textFontWeight', label: 'Font weight', editor: 'select',
   options: ['normal', 'bold', 'lighter'],
+}
+
+const textContentField: PropertyFieldSchema = {
+  key: 'text', label: 'Text', editor: 'text',
 }
 
 // ── Section presets ──
@@ -123,23 +154,23 @@ const shapeFillSection: PropertySection = {
 
 const textSection: PropertySection = {
   title: 'Text',
-  fields: [textColorField, textFontSizeField, textFontField, textFontWeightField, textBackgroundColorField],
+  fields: [textContentField, textColorField, textFontSizeField, textFontField, textFontWeightField, textBackgroundColorField],
 }
 
 const textMinimalSection: PropertySection = {
   title: 'Text',
-  fields: [textColorField, textFontSizeField],
+  fields: [textContentField, textColorField, textFontSizeField],
 }
 
 // ── Schema definitions by overlay category ──
 
 const lineOnlySchema: OverlayPropertySchema = {
-  sections: [lineSection],
+  sections: [lineSection, textSection],
 }
 
 // Shapes: stroke uses borderColor/borderWidth/borderStyle (PolygonStyle)
 const shapeSchema: OverlayPropertySchema = {
-  sections: [shapeStrokeSection, shapeFillSection],
+  sections: [shapeStrokeSection, shapeFillSection, textSection],
 }
 
 const annotationSchema: OverlayPropertySchema = {
@@ -150,23 +181,12 @@ const waveSchema: OverlayPropertySchema = {
   sections: [lineSection, textMinimalSection],
 }
 
-const fibonacciSchema: OverlayPropertySchema = {
-  sections: [
-    lineSection,
-    textMinimalSection,
-    { title: 'Fill', fields: [backgroundColorField] },
-  ],
-}
-
-const gannSchema: OverlayPropertySchema = {
-  sections: [lineSection, { title: 'Fill', fields: [backgroundColorField] }, textMinimalSection],
-}
-
 // Arrow: uses lineColor/lineWidth/lineStyle (LineStyle), arrowhead inherits lineColor
 const arrowSchema: OverlayPropertySchema = {
   sections: [
     { title: 'Line', fields: [lineColorField, lineWidthField, lineStyleField, lineDashedValueField] },
     { title: 'Fill', fields: [backgroundColorField] },
+    textSection,
   ],
 }
 
@@ -188,11 +208,22 @@ const OVERLAY_SCHEMA_MAP: Record<string, OverlayPropertySchema> = {
   verticalRayLine: lineOnlySchema,
   verticalSegment: lineOnlySchema,
   priceLine: lineOnlySchema,
-  // Channels
-  parallelStraightLine: lineOnlySchema,
-  priceChannelLine: lineOnlySchema,
-  // Fibonacci (line-only variant)
-  fibonacciLine: lineOnlySchema,
+  // Channels — structural overlays with per-figure keys
+  parallelStraightLine: {
+    sections: [lineSection],
+    figureFields: [
+      { key: 'line_0', label: 'Line 1', figureType: 'line' },
+      { key: 'line_1', label: 'Line 2', figureType: 'line' },
+    ],
+  },
+  priceChannelLine: {
+    sections: [lineSection],
+    figureFields: [
+      { key: 'line_0', label: 'Top', figureType: 'line' },
+      { key: 'line_1', label: 'Bottom', figureType: 'line' },
+      { key: 'line_2', label: 'Middle', figureType: 'line' },
+    ],
+  },
   // Shapes — use border* properties for stroke
   rect: shapeSchema,
   circle: shapeSchema,
@@ -211,16 +242,102 @@ const OVERLAY_SCHEMA_MAP: Record<string, OverlayPropertySchema> = {
   fiveWaves: waveSchema,
   eightWaves: waveSchema,
   anyWaves: waveSchema,
-  abcd: waveSchema,
-  xabcd: waveSchema,
-  // Fibonacci (extended)
-  fibonacciSegment: fibonacciSchema,
-  fibonacciCircle: fibonacciSchema,
-  fibonacciSpiral: fibonacciSchema,
-  fibonacciSpeedResistanceFan: fibonacciSchema,
-  fibonacciExtension: fibonacciSchema,
-  // Gann
-  gannBox: gannSchema,
+  // Harmonic patterns — structural overlays with per-figure keys
+  abcd: {
+    sections: [lineSection, textMinimalSection],
+    figureFields: [
+      { key: 'main', label: 'Main', figureType: 'line' },
+      { key: 'connector_ac', label: 'A-C', figureType: 'line' },
+      { key: 'connector_bd', label: 'B-D', figureType: 'line' },
+    ],
+  },
+  xabcd: {
+    sections: [lineSection, textMinimalSection, { title: 'Fill', fields: [backgroundColorField] }],
+    figureFields: [
+      { key: 'main', label: 'Main', figureType: 'line' },
+      { key: 'connector_xb', label: 'X-B', figureType: 'line' },
+      { key: 'connector_ac', label: 'A-C', figureType: 'line' },
+      { key: 'connector_bd', label: 'B-D', figureType: 'line' },
+    ],
+  },
+  // Fibonacci — level-based overlays
+  fibonacciLine: {
+    sections: [lineSection, textMinimalSection],
+    levelConfig: {
+      defaultLevels: FIBONACCI_RETRACEMENT_LEVELS,
+      figureType: 'line',
+      keyPrefix: 'level',
+      maxLevels: 24,
+    },
+  },
+  fibonacciSegment: {
+    sections: [lineSection, textMinimalSection],
+    levelConfig: {
+      defaultLevels: FIBONACCI_RETRACEMENT_LEVELS,
+      figureType: 'line',
+      keyPrefix: 'level',
+      maxLevels: 24,
+    },
+  },
+  fibonacciExtension: {
+    sections: [lineSection, textMinimalSection],
+    levelConfig: {
+      defaultLevels: FIBONACCI_EXTENSION_LEVELS,
+      figureType: 'line',
+      keyPrefix: 'level',
+      maxLevels: 24,
+    },
+  },
+  fibonacciCircle: {
+    sections: [
+      { title: 'Stroke', fields: [borderColorField, borderWidthField, borderStyleField] },
+      textMinimalSection,
+      { title: 'Fill', fields: [fillStyleField, backgroundColorField] },
+    ],
+    levelConfig: {
+      defaultLevels: FIBONACCI_CIRCLE_LEVELS,
+      figureType: 'circle',
+      keyPrefix: 'circle',
+      maxLevels: 24,
+    },
+  },
+  fibonacciSpeedResistanceFan: {
+    sections: [lineSection, textMinimalSection],
+    levelConfig: {
+      defaultLevels: FIBONACCI_FAN_LEVELS,
+      figureType: 'line',
+      keyPrefix: 'fan',
+      maxLevels: 24,
+    },
+  },
+  // Fibonacci spiral — structural (arcs + ray)
+  fibonacciSpiral: {
+    sections: [
+      lineSection,
+      { title: 'Fill', fields: [backgroundColorField] },
+    ],
+    figureFields: [
+      { key: 'arc_0', label: 'Arc 1', figureType: 'arc' },
+      { key: 'arc_1', label: 'Arc 2', figureType: 'arc' },
+      { key: 'arc_2', label: 'Arc 3', figureType: 'arc' },
+      { key: 'arc_3', label: 'Arc 4', figureType: 'arc' },
+      { key: 'arc_4', label: 'Arc 5', figureType: 'arc' },
+      { key: 'arc_5', label: 'Arc 6', figureType: 'arc' },
+      { key: 'arc_6', label: 'Arc 7', figureType: 'arc' },
+      { key: 'arc_7', label: 'Arc 8', figureType: 'arc' },
+      { key: 'arc_8', label: 'Arc 9', figureType: 'arc' },
+      { key: 'ray', label: 'Ray', figureType: 'line' },
+    ],
+  },
+  // Gann — structural
+  gannBox: {
+    sections: [lineSection, { title: 'Fill', fields: [backgroundColorField] }],
+    figureFields: [
+      { key: 'border_0', label: 'Border', figureType: 'line' },
+      { key: 'solid_0', label: 'Diagonal 1', figureType: 'line' },
+      { key: 'solid_1', label: 'Diagonal 2', figureType: 'line' },
+    ],
+  },
 }
 
 // Fallback for unknown overlay types
@@ -265,6 +382,16 @@ export function getStrokeKeys(overlayName: string): StrokeKeys {
  * Line style presets for the floating bar.
  * Maps user-friendly names to property values.
  */
+/**
+ * Width options for the pixel width dropdown (line/border width).
+ */
+export const WIDTH_PX_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8]
+
+/**
+ * Standard font size options for the font size dropdown.
+ */
+export const FONT_SIZE_OPTIONS = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]
+
 export type LineStylePreset = 'solid' | 'dashed' | 'dotted'
 
 export const LINE_STYLE_PRESETS: Record<LineStylePreset, { style: string; dashedValue: number[] }> = {

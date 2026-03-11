@@ -2,15 +2,52 @@
 
 .@{prefix-cls}-overlay-setting-modal-content {
   display: flex;
-  align-items: start;
-  gap: 16px;
+  flex-direction: column;
+  gap: 0;
   height: fit-content;
   min-height: 200px;
   max-height: 400px;
-  overflow: auto;
+  overflow: hidden;
+
+  .tab-bar {
+    display: flex;
+    flex-direction: row;
+    border-bottom: 1px solid var(--superchart-border-color, #333);
+    flex-shrink: 0;
+
+    .tab-item {
+      position: relative;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--superchart-text-third-color, #888);
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      transition: color 150ms;
+
+      &:hover {
+        color: var(--superchart-text-second-color, #aaa);
+      }
+
+      &.active {
+        color: var(--superchart-primary-color, #1677FF);
+
+        &::after {
+          content: '';
+          position: absolute;
+          bottom: -1px;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: var(--superchart-primary-color, #1677FF);
+          border-radius: 1px 1px 0 0;
+        }
+      }
+    }
+  }
 
   .content {
-    height: 100%;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
@@ -40,6 +77,210 @@
       align-items: center;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
+    }
+
+    .superchart-overlay-text-input {
+      box-sizing: border-box;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--superchart-text-color, #ccc);
+      background: var(--superchart-background-color, #1a1a1a);
+      border: 1px solid var(--superchart-border-color, #333);
+      border-radius: 4px;
+      outline: none;
+
+      &:focus {
+        border-color: var(--superchart-primary-color, #1677FF);
+      }
+    }
+
+    .level-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--superchart-primary-color, #1677FF);
+      }
+
+      .level-label {
+        flex: 1;
+        font-size: 12px;
+        color: var(--superchart-text-second-color, #aaa);
+        min-width: 50px;
+      }
+
+      .level-remove {
+        background: none;
+        border: none;
+        color: var(--superchart-text-third-color, #666);
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 4px;
+        line-height: 1;
+
+        &:hover {
+          color: var(--superchart-danger-color, #ff4d4f);
+        }
+      }
+    }
+
+    .extend-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--superchart-text-second-color, #aaa);
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--superchart-primary-color, #1677FF);
+      }
+    }
+
+    .level-add {
+      background: none;
+      border: 1px dashed var(--superchart-border-color, #333);
+      color: var(--superchart-text-second-color, #aaa);
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 4px;
+
+      &:hover {
+        border-color: var(--superchart-primary-color, #1677FF);
+        color: var(--superchart-primary-color, #1677FF);
+      }
+    }
+  }
+
+  .coordinates-content {
+    .coordinate-point {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .coordinate-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--superchart-text-second-color, #aaa);
+      }
+
+      .coordinate-inputs {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+    }
+  }
+
+  .visibility-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100px;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--superchart-text-third-color, #888);
+  }
+
+  .visibility-content {
+    .visibility-master {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--superchart-text-color, #fff);
+      cursor: pointer;
+      border-bottom: 1px solid var(--superchart-border-color, #333);
+      margin-bottom: 4px;
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--superchart-primary-color, #1677FF);
+      }
+    }
+
+    .visibility-rules {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      &.disabled {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+
+      .visibility-rule {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 0;
+
+        .rule-toggle {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          min-width: 110px;
+
+          input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            accent-color: var(--superchart-primary-color, #1677FF);
+          }
+
+          .rule-label {
+            font-size: 12px;
+            color: var(--superchart-text-second-color, #aaa);
+          }
+        }
+
+        .rule-range {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          select {
+            background: var(--superchart-popover-background-color, #0b0b0c);
+            color: var(--superchart-text-color, #fff);
+            border: 1px solid var(--superchart-border-color, #333);
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 12px;
+            min-width: 56px;
+            cursor: pointer;
+            outline: none;
+
+            &:focus {
+              border-color: var(--superchart-primary-color, #1677FF);
+            }
+
+            &:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+          }
+
+          .range-separator {
+            font-size: 11px;
+            color: var(--superchart-text-third-color, #888);
+          }
+        }
+      }
     }
   }
 }
