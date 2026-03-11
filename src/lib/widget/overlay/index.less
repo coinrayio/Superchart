@@ -79,6 +79,21 @@
       gap: 16px;
     }
 
+    .superchart-overlay-text-input {
+      box-sizing: border-box;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--superchart-text-color, #ccc);
+      background: var(--superchart-background-color, #1a1a1a);
+      border: 1px solid var(--superchart-border-color, #333);
+      border-radius: 4px;
+      outline: none;
+
+      &:focus {
+        border-color: var(--superchart-primary-color, #1677FF);
+      }
+    }
+
     .level-row {
       display: flex;
       align-items: center;

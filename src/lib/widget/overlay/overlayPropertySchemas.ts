@@ -18,7 +18,7 @@ import {
 export interface PropertyFieldSchema {
   key: keyof OverlayProperties
   label: string
-  editor: 'color' | 'number' | 'select' | 'dashedValue' | 'widthPx' | 'fontSize'
+  editor: 'color' | 'number' | 'select' | 'dashedValue' | 'widthPx' | 'fontSize' | 'text'
   options?: string[]
   min?: number
   max?: number
@@ -130,6 +130,10 @@ const textFontWeightField: PropertyFieldSchema = {
   options: ['normal', 'bold', 'lighter'],
 }
 
+const textContentField: PropertyFieldSchema = {
+  key: 'text', label: 'Text', editor: 'text',
+}
+
 // ── Section presets ──
 
 const lineSection: PropertySection = {
@@ -150,23 +154,23 @@ const shapeFillSection: PropertySection = {
 
 const textSection: PropertySection = {
   title: 'Text',
-  fields: [textColorField, textFontSizeField, textFontField, textFontWeightField, textBackgroundColorField],
+  fields: [textContentField, textColorField, textFontSizeField, textFontField, textFontWeightField, textBackgroundColorField],
 }
 
 const textMinimalSection: PropertySection = {
   title: 'Text',
-  fields: [textColorField, textFontSizeField],
+  fields: [textContentField, textColorField, textFontSizeField],
 }
 
 // ── Schema definitions by overlay category ──
 
 const lineOnlySchema: OverlayPropertySchema = {
-  sections: [lineSection],
+  sections: [lineSection, textSection],
 }
 
 // Shapes: stroke uses borderColor/borderWidth/borderStyle (PolygonStyle)
 const shapeSchema: OverlayPropertySchema = {
-  sections: [shapeStrokeSection, shapeFillSection],
+  sections: [shapeStrokeSection, shapeFillSection, textSection],
 }
 
 const annotationSchema: OverlayPropertySchema = {
@@ -182,6 +186,7 @@ const arrowSchema: OverlayPropertySchema = {
   sections: [
     { title: 'Line', fields: [lineColorField, lineWidthField, lineStyleField, lineDashedValueField] },
     { title: 'Fill', fields: [backgroundColorField] },
+    textSection,
   ],
 }
 

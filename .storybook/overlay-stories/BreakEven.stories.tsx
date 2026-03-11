@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
 import type {Chart} from "klinecharts"
+import type {PriceLine} from "@superchart/index"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
 import {useCurrentPrice} from "../helpers/useCurrentPrice"
 import {createBreakEven, updateBreakEven, removeBreakEven} from "./overlays/break-even"
@@ -9,12 +10,15 @@ interface BreakEvenArgs {
   showBreakEven: boolean
   pricePercent: number
   color: string
+  labelPosition: "above" | "below" | "center"
+  labelAlign: "left" | "center" | "right"
+  editable: boolean
   symbol: string
 }
 
-function BreakEvenDemo({showBreakEven, pricePercent, color, symbol}: BreakEvenArgs) {
+function BreakEvenDemo({showBreakEven, pricePercent, color, labelPosition, labelAlign, editable, symbol}: BreakEvenArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
-  const overlayIdRef = useRef<string | null>(null)
+  const lineRef = useRef<PriceLine | null>(null)
   const currentPrice = useCurrentPrice(chart)
 
   const onChart = useCallback((c: Chart) => setChart(c), [])
@@ -25,16 +29,23 @@ function BreakEvenDemo({showBreakEven, pricePercent, color, symbol}: BreakEvenAr
     if (!chart || !resolvedPrice) return
 
     if (showBreakEven) {
-      if (overlayIdRef.current) {
-        updateBreakEven(chart, overlayIdRef.current, resolvedPrice, color)
+      if (lineRef.current) {
+        updateBreakEven(lineRef.current, resolvedPrice, color)
+        lineRef.current
+          .setLabelPosition(labelPosition)
+          .setLabelAlign(labelAlign)
+          .setEditable(editable)
       } else {
-        overlayIdRef.current = createBreakEven(chart, resolvedPrice, color)
+        lineRef.current = createBreakEven(chart, resolvedPrice, color)
+          .setLabelPosition(labelPosition)
+          .setLabelAlign(labelAlign)
+          .setEditable(editable)
       }
-    } else if (overlayIdRef.current) {
-      removeBreakEven(chart, overlayIdRef.current)
-      overlayIdRef.current = null
+    } else if (lineRef.current) {
+      removeBreakEven(lineRef.current)
+      lineRef.current = null
     }
-  }, [chart, showBreakEven, resolvedPrice, color])
+  }, [chart, showBreakEven, resolvedPrice, color, labelPosition, labelAlign, editable])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
@@ -43,9 +54,12 @@ const meta: Meta<typeof BreakEvenDemo> = {
   title: "Overlays/BreakEven",
   component: BreakEvenDemo,
   argTypes: {
-    showBreakEven: {control: "boolean"},
-    pricePercent: {control: {type: "number", step: 0.1}, description: "% offset from current price"},
-    color: {control: "color", description: "Line and label color"},
+    showBreakEven: {control: "boolean", table: {category: "Settings"}},
+    pricePercent: {control: {type: "number", step: 0.1}, description: "% offset from current price", table: {category: "Settings"}},
+    color: {control: "color", table: {category: "Styling"}},
+    labelPosition: {control: "inline-radio", options: ["above", "below", "center"], table: {category: "Label"}},
+    labelAlign: {control: "inline-radio", options: ["left", "center", "right"], table: {category: "Label"}},
+    editable: {control: "boolean", description: "Double-click label to edit", table: {category: "Label"}},
     symbol: {control: "text", table: {category: "Chart"}},
   },
 }
@@ -58,6 +72,9 @@ export const Default: Story = {
     showBreakEven: true,
     pricePercent: 1,
     color: "#D05DDF",
+    labelPosition: "center",
+    labelAlign: "left",
+    editable: true,
     symbol: "BINA_USDT_BTC",
   },
 }

@@ -322,8 +322,9 @@ export default class Superchart implements SuperchartApi {
           // Subscribe to visible range changes from the underlying chart
           const chart = api.getChart()
           if (chart) {
-            const handler = (range: VisibleRange): void => {
+            const handler = (data?: unknown): void => {
               if (this._listeners.visibleRangeChange.size === 0) return
+              const range = data as VisibleRange
               const dataList = chart.getDataList()
               const fromTs = dataList[range.realFrom]?.timestamp ?? 0
               const toTs = dataList[range.realTo]?.timestamp ?? 0

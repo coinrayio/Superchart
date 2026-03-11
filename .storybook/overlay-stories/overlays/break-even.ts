@@ -1,24 +1,35 @@
 import type {Chart} from "klinecharts"
+import {createPriceLine, type PriceLine} from "@superchart/index"
 
-export function createBreakEven(chart: Chart, price: number, color = "#D05DDF"): string | null {
-  return chart.createOverlay({
-    name: "priceLine",
-    points: [{value: price}],
-    styles: {
-      line: {color, size: 1, style: "dashed"},
-      text: {color: "#FFFFFF", backgroundColor: color},
-    },
-    lock: true,
-  })
+export function createBreakEven(chart: Chart, price: number, color = "#D05DDF"): PriceLine {
+  return createPriceLine(chart, {price})
+    .setLineColor(color)
+    .setLineStyle("dashed")
+    .setLineWidth(1)
+    .setLabelTextColor("#FFFFFF")
+    .setLabelBackgroundColor(color)
+    .setLabelBorderColor(color)
+    .setYAxisLabelTextColor("#FFFFFF")
+    .setYAxisLabelBackgroundColor(color)
+    .setYAxisLabelBorderColor(color)
+    .setLabelVisible(true)
+    .setLabelAlign('center')
+    .setLabelOffsetPercentX(50)
+    .setLabelPosition('center')
+    .setEditable(true)
+    .setText('Break Even')
 }
 
-export function updateBreakEven(chart: Chart, id: string, price: number, color = "#D05DDF"): void {
-  chart.overrideOverlay({id, points: [{value: price}], styles: {
-    line: {color, size: 1, style: "dashed"},
-    text: {color: "#FFFFFF", backgroundColor: color},
-  }})
+export function updateBreakEven(line: PriceLine, price: number, color = "#D05DDF"): void {
+  line
+    .setPrice(price)
+    .setLineColor(color)
+    .setLabelBackgroundColor(color)
+    .setLabelBorderColor(color)
+    .setYAxisLabelBackgroundColor(color)
+    .setYAxisLabelBorderColor(color)
 }
 
-export function removeBreakEven(chart: Chart, id: string): void {
-  chart.removeOverlay({id})
+export function removeBreakEven(line: PriceLine): void {
+  line.remove()
 }

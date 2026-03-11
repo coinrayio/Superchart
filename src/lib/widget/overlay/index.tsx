@@ -523,6 +523,17 @@ function FieldEditor({ field, value, onChange }: FieldEditorProps) {
         />
       )
     }
+    case 'text':
+      return (
+        <input
+          type="text"
+          className="superchart-overlay-text-input"
+          style={{ width: 200 }}
+          value={(value as string) ?? ''}
+          placeholder="Enter text..."
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )
     default:
       return null
   }

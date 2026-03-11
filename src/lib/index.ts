@@ -15,8 +15,8 @@ export { Superchart }
 // i18n
 export { load as loadLocale }
 
-// Order line (from coinray-chart)
-export { createOrderLine } from 'klinecharts'
+// Order line & Price line (from coinray-chart)
+export { createOrderLine, createPriceLine } from 'klinecharts'
 
 // DataLoader bridge (TradingView-compatible)
 export { createDataLoader } from './datafeed'
@@ -45,6 +45,9 @@ export type { PaneProperties } from './store/chartStore'
 
 // Order line types (from coinray-chart via overlay.ts re-exports)
 export type { OrderLine, OrderLineProperties, OrderLineStyle, OrderLineEventListener } from './types/overlay'
+
+// Price line types (from coinray-chart)
+export type { PriceLine, PriceLineProperties, PriceLineEventListener } from 'klinecharts'
 
 // Datafeed types
 export type {
