@@ -5,7 +5,10 @@ import {fileURLToPath} from "url"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const config: StorybookConfig = {
-  stories: ["./overlay-stories/**/*.stories.@(ts|tsx)"],
+  stories: [
+    "./overlay-stories/**/*.stories.@(ts|tsx)",
+    "./api-stories/**/*.stories.@(ts|tsx)",
+  ],
   framework: "@storybook/react-vite",
   viteFinal: (config) => {
     config.resolve ??= {}
