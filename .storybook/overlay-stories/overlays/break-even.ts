@@ -14,7 +14,7 @@ export function createBreakEven(chart: Chart, price: number, color = "#D05DDF"):
     .setYAxisLabelBorderColor(color)
     .setLabelVisible(true)
     .setLabelAlign('center')
-    .setLabelOffsetPercentX(50)
+    // .setLabelOffsetPercentX(50)   // this overrides .setLabelAlign('')
     .setLabelPosition('center')
     .setEditable(true)
     .setText('Break Even')
