@@ -1,0 +1,61 @@
+@prefix-cls: superchart;
+
+@period-bar-height: 38px;
+@drawing-bar-width: 52px;
+@order-panel-height: 260px;
+@widget-width: calc(100% - @drawing-bar-width);
+@widget-height: calc(100% - @period-bar-height);
+@content-height: calc(@widget-height - @order-panel-height);
+
+@c-primary: #1677ff;
+
+// Light theme colors
+@c-hover-background-light: fade(#1677ff, 15%);
+@c-popover-background-light: #ffffff;
+@c-background-light: #ffffff;
+@c-text-light: #051441;
+@c-text-second-light: #76808F;
+@c-border-light: #ebedf1;
+@c-pane-background-light: @c-background-light;
+@c-pane-background-gradient-start-light: @c-background-light;
+@c-pane-background-gradient-end-light: @c-background-light;
+
+// Dark theme colors
+@c-hover-background-dark: fade(#1677ff, 15%);
+@c-background-dark: #151517;
+@c-popover-background-dark: #1c1c1f;
+@c-text-dark: #f8f8f8;
+@c-text-second-dark: #929AA5;
+@c-border-dark: #292929;
+@c-pane-background-dark: @c-background-dark;
+@c-pane-background-gradient-start-dark: #141442;
+@c-pane-background-gradient-end-dark: @c-background-dark;
+
+:root {
+  --superchart-primary-color: @c-primary;
+  --superchart-hover-background-color: @c-hover-background-light;
+  --superchart-background-color: @c-background-light;
+  --superchart-popover-background-color: @c-popover-background-light;
+  --superchart-text-color: @c-text-light;
+  --superchart-text-second-color: @c-text-second-light;
+  --superchart-border-color: @c-border-light;
+  --superchart-selected-color: fade(@c-primary, 15%);
+  --superchart-popup-shadow-color: rgba(0, 0, 0, 0.2);
+  --superchart-pane-background: @c-pane-background-light;
+  --superchart-pane-background-gradient-start: @c-pane-background-gradient-start-light;
+  --superchart-pane-background-gradient-end: @c-pane-background-gradient-end-light;
+}
+
+/* Dark mode */
+:root [data-theme="dark"] {
+  --superchart-hover-background-color: @c-hover-background-dark;
+  --superchart-background-color: @c-background-dark;
+  --superchart-popover-background-color: @c-popover-background-dark;
+  --superchart-text-color: @c-text-dark;
+  --superchart-text-second-color: @c-text-second-dark;
+  --superchart-border-color: @c-border-dark;
+  --superchart-popup-shadow-color: rgba(255, 255, 255, 0.793);
+  --superchart-pane-background: @c-pane-background-dark;
+  --superchart-pane-background-gradient-start: @c-pane-background-gradient-start-dark;
+  --superchart-pane-background-gradient-end: @c-pane-background-gradient-end-dark;
+}

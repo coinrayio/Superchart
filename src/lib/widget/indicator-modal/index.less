@@ -1,0 +1,256 @@
+@import (reference) '../../base.less';
+
+// Override the modal inner width to allow 720px
+.@{prefix-cls}-indicator-modal {
+  .inner {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  // Remove default content-container padding that would clip our layout
+  .content-container {
+    padding: 0 !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+// Search bar
+.@{prefix-cls}-indicator-modal-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--superchart-border-color);
+  flex-shrink: 0;
+
+  &-icon {
+    color: var(--superchart-text-second-color);
+    flex-shrink: 0;
+  }
+
+  &-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    color: var(--superchart-text-color);
+
+    &::placeholder {
+      color: var(--superchart-text-second-color);
+    }
+  }
+
+  &-clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: var(--superchart-text-second-color);
+    display: flex;
+    align-items: center;
+    border-radius: 3px;
+
+    &:hover {
+      color: var(--superchart-text-color);
+      background: var(--superchart-hover-background-color);
+    }
+  }
+}
+
+// Body: sidebar + panel
+.@{prefix-cls}-indicator-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 480px;
+}
+
+// Left sidebar
+.@{prefix-cls}-indicator-modal-sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--superchart-border-color);
+  overflow-y: auto;
+  padding: 8px 0;
+
+  &-group {
+    margin-bottom: 4px;
+
+    &-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--superchart-text-second-color);
+      padding: 8px 12px 4px;
+      user-select: none;
+    }
+  }
+
+  &-item {
+    padding: 6px 12px 6px 20px;
+    font-size: 13px;
+    color: var(--superchart-text-color);
+    cursor: pointer;
+    border-radius: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover {
+      background: var(--superchart-hover-background-color);
+    }
+
+    &.active {
+      color: var(--superchart-primary-color);
+      background: fade(#1677ff, 10%);
+      font-weight: 500;
+    }
+  }
+}
+
+// Right panel
+.@{prefix-cls}-indicator-modal-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+
+  &-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--superchart-border-color);
+    flex-shrink: 0;
+    padding: 0 8px;
+  }
+
+  &-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--superchart-text-second-color);
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover {
+      color: var(--superchart-text-color);
+    }
+
+    &.active {
+      color: var(--superchart-primary-color);
+      border-bottom-color: var(--superchart-primary-color);
+      font-weight: 500;
+    }
+  }
+}
+
+// Indicator list
+.@{prefix-cls}-indicator-modal-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+// Group title inside the list
+.@{prefix-cls}-indicator-modal-group-title {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--superchart-text-second-color);
+  position: sticky;
+  top: 0;
+  background: var(--superchart-popover-background-color);
+  user-select: none;
+  display: list-item;
+}
+
+// Individual indicator row
+.@{prefix-cls}-indicator-modal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: var(--superchart-hover-background-color);
+
+    .@{prefix-cls}-indicator-check {
+      opacity: 1;
+    }
+  }
+
+  &-name {
+    font-size: 13px;
+    color: var(--superchart-text-color);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+}
+
+.@{prefix-cls}-indicator-check {
+  color: var(--superchart-primary-color);
+  flex-shrink: 0;
+}
+
+// Overlay tag for built-in overlay indicators
+.@{prefix-cls}-indicator-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--superchart-hover-background-color);
+  color: var(--superchart-text-second-color);
+  white-space: nowrap;
+}
+
+// Badges
+.@{prefix-cls}-indicator-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+
+  &--new {
+    background: rgba(34, 197, 94, 0.18);
+    color: #22c55e;
+  }
+
+  &--updated {
+    background: rgba(249, 115, 22, 0.18);
+    color: #f97316;
+  }
+}
+
+// Empty state inside list
+.@{prefix-cls}-indicator-modal-empty {
+  display: list-item;
+  padding: 24px 16px;
+  font-size: 13px;
+  color: var(--superchart-text-second-color);
+  text-align: center;
+}

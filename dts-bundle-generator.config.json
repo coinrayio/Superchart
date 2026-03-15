@@ -1,0 +1,17 @@
+{
+  "compilationOptions": {
+    "preferredConfigPath": "./tsconfig.dts.json"
+  },
+  "entries": [
+    {
+      "filePath": "./src/lib/index.ts",
+      "outFile": "./dist/index.d.ts",
+      "noCheck": true,
+      "output": {
+        "noBanner": true,
+        "exportReferencedTypes": false,
+        "umdModuleName": "superchart"
+      }
+    }
+  ]
+}
