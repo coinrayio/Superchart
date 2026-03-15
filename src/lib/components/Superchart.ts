@@ -326,8 +326,11 @@ export default class Superchart implements SuperchartApi {
               if (this._listeners.visibleRangeChange.size === 0) return
               const range = data as VisibleRange
               const dataList = chart.getDataList()
+              // Clamp realTo to the last valid data index — realTo can exceed
+              // dataList.length when there is empty space after the last candle
+              const clampedTo = Math.min(range.realTo, dataList.length - 1)
               const fromTs = dataList[range.realFrom]?.timestamp ?? 0
-              const toTs = dataList[range.realTo]?.timestamp ?? 0
+              const toTs = dataList[clampedTo]?.timestamp ?? 0
               if (fromTs > 0 && toTs > 0) {
                 const timeRange: VisibleTimeRange = {
                   from: Math.floor(fromTs / 1000),
@@ -423,6 +426,20 @@ export default class Superchart implements SuperchartApi {
 
   getChart(): Nullable<Chart> {
     return this._api?.getChart() ?? store.instanceApi()
+  }
+
+  /**
+   * Set the visible range by scrolling and zooming so that the given
+   * time range (unix seconds) fills the chart viewport.
+   */
+  setVisibleRange(range: VisibleTimeRange): void {
+    const chart = this.getChart()
+    if (!chart) return
+    // Convert seconds to milliseconds for klinecharts timestamps
+    chart.setVisibleRange({
+      from: range.from * 1000,
+      to: range.to * 1000,
+    })
   }
 
   resize(): void {

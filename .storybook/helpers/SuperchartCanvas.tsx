@@ -147,7 +147,7 @@ export function SuperchartCanvas({
       chartSetVisibleRange.current = false
       return
     }
-    // TODO: superchart.setVisibleRange(visibleRange)
+    superchartRef.current.setVisibleRange(visibleRange)
   }, [visibleRange])
 
   // Sync theme changes
