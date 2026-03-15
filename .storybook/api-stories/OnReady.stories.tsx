@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
 import {Superchart, createDataLoader} from "@superchart/index"
 import {CoinrayDatafeed} from "../helpers/CoinrayDatafeed"
-import {waitForReady} from "./overlays/on-ready"
+import {waitForReady} from "../overlay-stories/overlays/on-ready"
 
 const TOKEN = import.meta.env.VITE_COINRAY_TOKEN || ""
 
