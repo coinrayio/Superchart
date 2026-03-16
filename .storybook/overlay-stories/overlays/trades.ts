@@ -1,4 +1,5 @@
-import type {Chart, Nullable} from "klinecharts"
+import type {Chart, Nullable, TradeLine, TradeLineProperties} from "klinecharts"
+import {createTradeLine} from "klinecharts"
 
 export interface Trade {
   time: number
@@ -7,24 +8,36 @@ export interface Trade {
   amount?: number
 }
 
+export interface TradeOptions {
+  arrowType?: "wide" | "arrow" | "tiny"
+  color?: string
+  textColor?: string
+  text?: string
+  textFontSize?: number
+  textGap?: number
+  gap?: number
+}
+
 export function createTrade(
   chart: Chart,
   trade: Trade,
-  text?: string,
-  color?: string,
-  textColor?: string,
-): Nullable<string> {
-  return chart.createOverlay({
-    name: "simpleAnnotation",
-    points: [{timestamp: trade.time * 1000, value: trade.price}],
-    extendData: {
-      text: text || "",
-      direction: trade.side === "buy" ? "up" : "down",
-      color,
-      textColor,
-    },
-    lock: true,
-  }) as Nullable<string>
+  options?: TradeOptions,
+): Nullable<TradeLine> {
+  const direction = trade.side === "buy" ? "up" : "down" as const
+  const props: Partial<TradeLineProperties> = {
+    direction,
+    arrowType: options?.arrowType ?? "wide",
+    color: options?.color,
+    textColor: options?.textColor,
+    text: options?.text ?? "",
+    textFontSize: options?.textFontSize,
+    textGap: options?.textGap,
+    gap: options?.gap ?? 4,
+    timestamp: trade.time * 1000,
+    price: trade.price,
+  }
+
+  return createTradeLine(chart, props)
 }
 
 export function removeTrade(chart: Chart, id: string): void {
@@ -32,5 +45,5 @@ export function removeTrade(chart: Chart, id: string): void {
 }
 
 export function removeAllTrades(chart: Chart): void {
-  chart.removeOverlay({name: "simpleAnnotation"})
+  chart.removeOverlay({name: "tradeLine"})
 }
