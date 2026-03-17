@@ -16,6 +16,7 @@ export interface TradeOptions {
   textFontSize?: number
   textGap?: number
   gap?: number
+  showLabelArrow?: boolean
 }
 
 export function createTrade(
@@ -33,6 +34,7 @@ export function createTrade(
     textFontSize: options?.textFontSize,
     textGap: options?.textGap,
     gap: options?.gap ?? 4,
+    showLabelArrow: options?.showLabelArrow,
     timestamp: trade.time * 1000,
     price: trade.price,
   }

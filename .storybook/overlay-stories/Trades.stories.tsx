@@ -11,6 +11,7 @@ interface TradesArgs {
   arrowType: "wide" | "arrow" | "tiny"
   showAmount: boolean
   showPrice: boolean
+  showLabelArrow: boolean
   buyColor: string
   sellColor: string
   labelColor: string
@@ -36,7 +37,7 @@ function formatLabel(side: string, amount: number, price: number, showAmount: bo
   return parts.join(" ")
 }
 
-function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, buyColor, sellColor, labelColor, textFontSize, textGap, gap, symbol}: TradesArgs) {
+function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, showLabelArrow, buyColor, sellColor, labelColor, textFontSize, textGap, gap, symbol}: TradesArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
   const tradesRef = useRef<TradeEntry[]>([])
 
@@ -69,7 +70,7 @@ function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, 
         const tradeLine = createTrade(
           chart,
           {time: match.timestamp / 1000, price, side, amount},
-          {arrowType, color, textColor: labelColor, text: label, textFontSize, textGap, gap},
+          {arrowType, color, textColor: labelColor, text: label, textFontSize, textGap, gap, showLabelArrow},
         )
         if (tradeLine) {
           tradesRef.current.push({tradeLine, side, amount, price})
@@ -108,9 +109,10 @@ function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, 
         .setTextFontSize(textFontSize)
         .setTextGap(textGap)
         .setGap(gap)
+        .setShowLabelArrow(showLabelArrow)
         .setText(label)
     }
-  }, [arrowType, buyColor, sellColor, labelColor, textFontSize, textGap, gap, showAmount, showPrice])
+  }, [arrowType, buyColor, sellColor, labelColor, textFontSize, textGap, gap, showLabelArrow, showAmount, showPrice])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
@@ -123,6 +125,7 @@ const meta: Meta<typeof TradesDemo> = {
     gap: {control: {type: "number", min: 0, max: 20, step: 1}, description: "Pixel gap between arrow and candle", table: {category: "Arrow"}},
     showAmount: {control: "boolean", description: "Show amount in label", table: {category: "Label"}},
     showPrice: {control: "boolean", description: "Show price in label", table: {category: "Label"}},
+    showLabelArrow: {control: "boolean", description: "Show small indicator arrow near label", table: {category: "Label"}},
     textFontSize: {control: {type: "number", min: 6, max: 24, step: 1}, description: "Text font size (px)", table: {category: "Text"}},
     textGap: {control: {type: "number", min: 0, max: 20, step: 1}, description: "Pixel gap between text and arrow", table: {category: "Text"}},
     buyColor: {control: "color", description: "Buy arrow color", table: {category: "Colors"}},
@@ -143,6 +146,7 @@ export const WideArrows: Story = {
     gap: 4,
     showAmount: true,
     showPrice: true,
+    showLabelArrow: true,
     textFontSize: 12,
     textGap: 2,
     buyColor: "#4CAF50",
