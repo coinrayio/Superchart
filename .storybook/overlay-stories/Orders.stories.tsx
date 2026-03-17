@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
-import type {Chart} from "klinecharts"
+import type {Chart} from "@superchart"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
 import {useCurrentPrice} from "../helpers/useCurrentPrice"
 import {createOrder, type MockOrder, type OrderLine, removeOrder} from "./overlays/order-line"

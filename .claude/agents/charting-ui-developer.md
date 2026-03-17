@@ -79,6 +79,7 @@ Built output lands in `dist/`. The Superchart library imports this as `"klinecha
 3. **Never modify `Chart.ts` public API signatures** without also updating `src/lib/components/Superchart.ts` in the parent project.
 4. **Run `npm run code-lint`** before considering any task complete.
 5. **Never touch `examples/`, `src/lib/`, or `.storybook/`** — those belong to other agents.
+6. **Re-export new consumer-facing types/functions**: When adding new types or factory functions (e.g., `createTradeLine`, `TradeLine`, `TradeLineProperties`), export them from `src/index.ts` so the parent project can re-export them from `src/lib/index.ts`. See CLAUDE.md "Re-export policy" for what qualifies as consumer-facing.
 
 ## Workflow
 

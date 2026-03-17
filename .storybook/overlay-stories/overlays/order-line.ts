@@ -1,4 +1,4 @@
-import type {Chart, OrderLineEventListener} from "klinecharts"
+import type {Chart, OrderLineEventListener} from "@superchart"
 import {createOrderLine, type OrderLine, type OrderLineProperties} from "@superchart/index"
 
 export type {OrderLine, OrderLineProperties}

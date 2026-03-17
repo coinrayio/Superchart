@@ -1,5 +1,5 @@
-import type {Chart, Nullable, TradeLine, TradeLineProperties} from "klinecharts"
-import {createTradeLine} from "klinecharts"
+import type {Chart, Nullable, TradeLine, TradeLineProperties} from "@superchart"
+import {createTradeLine} from "@superchart"
 
 export interface Trade {
   time: number
