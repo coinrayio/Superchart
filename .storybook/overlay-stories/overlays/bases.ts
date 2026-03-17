@@ -1,4 +1,4 @@
-import type {Chart, Nullable, Overlay} from "klinecharts"
+import type {Chart, Nullable, Overlay} from "@superchart"
 
 export interface Base {
   id: number

@@ -1,5 +1,5 @@
-import type {Chart, Nullable, TradeLine, TradeLineProperties} from "klinecharts"
-import {createTradeLine} from "klinecharts"
+import type {Chart, Nullable, TradeLine, TradeLineProperties} from "@superchart"
+import {createTradeLine} from "@superchart"
 
 export interface Trade {
   time: number
@@ -16,6 +16,7 @@ export interface TradeOptions {
   textFontSize?: number
   textGap?: number
   gap?: number
+  showLabelArrow?: boolean
 }
 
 export function createTrade(
@@ -33,6 +34,7 @@ export function createTrade(
     textFontSize: options?.textFontSize,
     textGap: options?.textGap,
     gap: options?.gap ?? 4,
+    showLabelArrow: options?.showLabelArrow,
     timestamp: trade.time * 1000,
     price: trade.price,
   }

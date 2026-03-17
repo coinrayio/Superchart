@@ -1,4 +1,4 @@
-import type {Chart, Nullable} from "klinecharts"
+import type {Chart, Nullable} from "@superchart"
 
 type Point = {timestamp: number, value: number}
 

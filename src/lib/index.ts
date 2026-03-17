@@ -15,8 +15,8 @@ export { Superchart }
 // i18n
 export { load as loadLocale }
 
-// Order line & Price line (from coinray-chart)
-export { createOrderLine, createPriceLine } from 'klinecharts'
+// Fluent API factories (from coinray-chart)
+export { createOrderLine, createPriceLine, createTradeLine } from 'klinecharts'
 
 // DataLoader bridge (TradingView-compatible)
 export { createDataLoader } from './datafeed'
@@ -25,7 +25,22 @@ export type { SuperchartDataLoader } from './datafeed'
 // Order line default styles (from coinray-chart)
 export { DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
 
-// Types - only export what consumers need
+// Core klinecharts types — re-exported so consumers import from superchart, not klinecharts
+export type {
+  Chart,
+  Nullable,
+  DeepPartial,
+  KLineData,
+  Point,
+  Styles,
+  Overlay,
+  OverlayCreate,
+  OverlayEvent,
+  Indicator,
+  IndicatorCreate,
+} from 'klinecharts'
+
+// Superchart-specific types
 export type {
   SuperchartOptions,
   SuperchartApi,
@@ -48,6 +63,9 @@ export type { OrderLine, OrderLineProperties, OrderLineStyle, OrderLineEventList
 
 // Price line types (from coinray-chart)
 export type { PriceLine, PriceLineProperties, PriceLineEventListener } from 'klinecharts'
+
+// Trade line types (from coinray-chart)
+export type { TradeLine, TradeLineProperties } from 'klinecharts'
 
 // Datafeed types
 export type {
@@ -74,4 +92,3 @@ export type {
   ScriptInfo,
   ScriptSaveParams,
 } from './types/script'
-

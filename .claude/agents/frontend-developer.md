@@ -59,6 +59,7 @@ You have deep knowledge of TradingView's Charting Library and Lightweight Charts
 ## Quality Checks
 
 - Ensure all new exports are added to `src/lib/index.ts` if they're part of the public API.
+- When klinecharts adds new consumer-facing types/functions, re-export them from `src/lib/index.ts`. See CLAUDE.md "Re-export policy" for what qualifies.
 - Ensure new types are added to `src/lib/types/` and properly exported.
 - Ensure Less styles follow the variable/mixin patterns in `src/lib/base.less`.
 - Ensure new overlays are registered in the extension system and follow the 18 existing extension patterns.
