@@ -26,6 +26,16 @@ export function textToPeriod(text: string): Period {
   return PERIOD_MAP[text] || PERIOD_MAP["1H"]
 }
 
+export interface ContextMenuItem {
+  text?: string
+  icon?: string
+  hotkey?: string
+  onClick?: () => void
+  type?: "item" | "separator"
+}
+
+export type OnContextMenu = (time: number, price: number) => ContextMenuItem[]
+
 interface Props {
   symbol?: string
   period?: string
@@ -36,6 +46,7 @@ interface Props {
   onPeriodChange?: (period: Period) => void
   onVisibleRangeChange?: (range: VisibleTimeRange) => void
   visibleRange?: VisibleTimeRange | null
+  onContextMenu?: OnContextMenu
 }
 
 export function SuperchartCanvas({
@@ -48,6 +59,7 @@ export function SuperchartCanvas({
   onSymbolChange,
   onPeriodChange,
   onVisibleRangeChange,
+  onContextMenu,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const superchartRef = useRef<Superchart | null>(null)
@@ -80,6 +92,7 @@ export function SuperchartCanvas({
       dataLoader,
       theme,
       debug: false,
+      onContextMenu,
       onSymbolChange: (s) => {
         chartSetSymbol.current = s.ticker
         onSymbolChangeRef.current?.(s)
@@ -89,8 +102,6 @@ export function SuperchartCanvas({
         onPeriodChangeRef.current?.(p)
       },
       onVisibleRangeChange: (r) => {
-        // TODO: This should only be called once per changed value
-        console.log("onVisibleRangeChange", r)
         chartSetVisibleRange.current = true
         onVisibleRangeChangeRef.current?.(r)
       },

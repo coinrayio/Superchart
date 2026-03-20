@@ -51,6 +51,8 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
   }, [])
 
   const handleVisibleRangeChange = useCallback((range: VisibleTimeRange) => {
+    // TODO: This should only be called once per changed value
+    console.log("handleVisibleRangeChange", range)
     setVisibleRange(range)
   }, [])
 
