@@ -1,6 +1,6 @@
 import {useEffect, useRef} from "react"
 import {Superchart, createDataLoader} from "@superchart/index"
-import type {Chart} from "@superchart"
+import type {Chart} from "@superchart/index"
 import type {SymbolInfo, Period, VisibleTimeRange} from "@superchart/index"
 import {CoinrayDatafeed} from "./CoinrayDatafeed"
 

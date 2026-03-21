@@ -20,19 +20,25 @@ export type {
   ProOverlayTemplate,
   OverlayPropertiesStore,
   FigureLevel,
+} from 'klinecharts'
+
+// Order line types (from Superchart extension)
+export type {
   OrderLineProperties,
   OrderLine,
   OrderLineStyle,
   OrderLineEventListener,
-} from 'klinecharts'
+} from '../extension/orderLineApi'
 
 // Re-export pro overlay utilities from coinray-chart
 export {
-  createOrderLine,
   isProOverlayTemplate,
   createPropertiesStore,
   DEFAULT_OVERLAY_PROPERTIES,
 } from 'klinecharts'
+
+// Order line factory (from Superchart extension)
+export { createOrderLine } from '../extension/orderLineApi'
 
 import type { DeepPartial, Point, OverlayProperties, Overlay, OverlayCreate, PeriodType } from 'klinecharts'
 
