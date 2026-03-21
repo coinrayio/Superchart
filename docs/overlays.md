@@ -223,65 +223,240 @@ Overlays are grouped into categories for the drawing bar UI:
 
 ## Order Lines
 
-Order lines are horizontal price-level overlays designed specifically for visualizing open orders.
+Order lines are horizontal price-level overlays for visualizing open orders, positions, and alerts. The API follows the TradingView `createOrderLine()` pattern with getter/setter pairs and fluent chaining.
+
+### Creating an Order Line
 
 ```typescript
-// Re-exported from klinecharts
-function createOrderLine(chart: Chart, price: number, properties?: DeepPartial<OrderLineProperties>): OrderLine
+import { createOrderLine } from 'superchart'
+import type { Chart } from 'superchart'
+
+const chart: Chart = superchart.getChart()!
+
+const orderLine = createOrderLine(chart, {
+  price: 49500,
+  text: 'Buy 0.5 BTC',
+  quantity: '0.5 BTC',
+  lineColor: '#4caf50',
+  lineStyle: 'dashed',
+  bodyBackgroundColor: '#4caf50',
+  bodyTextColor: '#FFFFFF',
+  editable: true,  // can be dragged to new price (default: true)
+})
+  .onCancel({ orderId: '123' }, (params) => cancelOrder(params.orderId))
+  .onModify({ orderId: '123' }, (params) => modifyOrder(params.orderId))
 ```
 
-```typescript
-const chart = new Superchart({ ... })
-const klineChart = chart.getChart()
+### OrderLine (fluent API)
 
-if (klineChart) {
-  const orderLine = createOrderLine(klineChart, 49500, {
-    line: { color: '#F57F17', style: 'dashed', size: 1 },
-    // ...
-  })
-}
-```
-
-### OrderLine
-
-The object returned by `createOrderLine`. Provides methods for updating and removing the line:
+All setters return `this` for chaining. Getters follow the TradingView `getX()`/`setX()` pattern.
 
 ```typescript
 export interface OrderLine {
-  setPrice(price: number): void
-  setVisible(visible: boolean): void
-  setProperties(properties: DeepPartial<OrderLineProperties>): void
-  dispose(): void
-  onMouseEnter(listener: OrderLineEventListener): void
-  onMouseLeave(listener: OrderLineEventListener): void
-  onClick(listener: OrderLineEventListener): void
-  onRightClick(listener: OrderLineEventListener): void
-}
+  readonly id: string
+  readonly paneId: string
 
-export type OrderLineEventListener = (orderLine: OrderLine, event: MouseEvent) => void
+  // Core data
+  getPrice(): number | undefined
+  setPrice(price: number): OrderLine
+  getText(): string | undefined
+  setText(text: string): OrderLine
+  getQuantity(): number | string | undefined
+  setQuantity(quantity: number | string): OrderLine
+  getTooltip(): string | undefined
+  setTooltip(tooltip: string): OrderLine
+  getModifyTooltip(): string | undefined
+  setModifyTooltip(tooltip: string): OrderLine
+  getCancelTooltip(): string | undefined
+  setCancelTooltip(tooltip: string): OrderLine
+
+  // Behavior
+  getEditable(): boolean         // default: true
+  setEditable(editable: boolean): OrderLine
+  getExtendLeft(): boolean
+  setExtendLeft(extend: boolean): OrderLine
+
+  // Layout
+  setAlign(align: 'left' | 'right'): OrderLine
+  setMarginLeft(margin: number): OrderLine
+  setMarginRight(margin: number): OrderLine
+
+  // Line styling
+  getLineColor(): string | undefined
+  setLineColor(color: string): OrderLine
+  getLineWidth(): number | undefined
+  setLineWidth(width: number): OrderLine
+  getLineStyle(): 'solid' | 'dashed' | undefined
+  setLineStyle(style: 'solid' | 'dashed'): OrderLine
+  setLineDashedValue(dashedValue: number[]): OrderLine
+  getLineLength(): number | undefined
+  setLineLength(length: number): OrderLine
+
+  // Body label
+  getBodyFont(): string | undefined
+  setBodyFont(font: string): OrderLine
+  setBodyFontWeight(weight: number | string): OrderLine
+  getBodyTextColor(): string | undefined
+  setBodyTextColor(color: string): OrderLine
+  getBodyBackgroundColor(): string | undefined
+  setBodyBackgroundColor(color: string): OrderLine
+  getBodyBorderColor(): string | undefined
+  setBodyBorderColor(color: string): OrderLine
+
+  // Quantity label
+  getQuantityFont(): string | undefined
+  setQuantityFont(font: string): OrderLine
+  setQuantityFontWeight(weight: number | string): OrderLine
+  getQuantityTextColor(): string | undefined
+  setQuantityTextColor(color: string): OrderLine
+  getQuantityBackgroundColor(): string | undefined
+  setQuantityBackgroundColor(color: string): OrderLine
+  getQuantityBorderColor(): string | undefined
+  setQuantityBorderColor(color: string): OrderLine
+
+  // Cancel button
+  getCancelButtonIconColor(): string | undefined
+  setCancelButtonIconColor(color: string): OrderLine
+  getCancelButtonBackgroundColor(): string | undefined
+  setCancelButtonBackgroundColor(color: string): OrderLine
+  getCancelButtonBorderColor(): string | undefined
+  setCancelButtonBorderColor(color: string): OrderLine
+
+  // Shared border
+  setBorderStyle(style: 'solid' | 'dashed'): OrderLine
+  setBorderSize(size: number): OrderLine
+  setBorderRadius(radius: number): OrderLine
+
+  // Visibility
+  setBodyVisible(visible: boolean): OrderLine
+  setQuantityVisible(visible: boolean): OrderLine
+  setCancelButtonVisible(visible: boolean): OrderLine
+
+  // Events (generic T for consumer data)
+  onMoveStart<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onMove<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onMoveEnd<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onCancel<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onModify<T>(params: T, callback: (params: T, event?) => void): OrderLine
+
+  // Lifecycle
+  getProperties(): OrderLineProperties
+  remove(): void
+}
 ```
+
+### Sections
+
+Each order line renders three sections (left to right): **body**, **quantity**, **cancelButton**.
+
+| Section | Interaction | Use case |
+|---|---|---|
+| body | Draggable (when `editable: true`), click does nothing | Label text (e.g. "Buy 0.5 BTC") |
+| quantity | Click calls `onModify` | Size/price display |
+| cancelButton | Click calls `onCancel` | X icon to cancel order |
+
+All sections are independently toggle-able via `setBodyVisible()`, `setQuantityVisible()`, and `setCancelButtonVisible()`. Hidden sections leave no gap.
+
+### Alignment
+
+```typescript
+// Right-aligned (default) — labels near the y-axis
+createOrderLine(chart, { price: 50000, text: 'Limit Buy', align: 'right' })
+
+// Left-aligned — labels at the left edge (e.g. "AVG ENTRY")
+createOrderLine(chart, { price: 50000, text: 'AVG ENTRY', align: 'left', marginLeft: 10 })
+```
+
+### Price Lines
+
+The overlay draws two dashed lines that skip the label area:
+- **price-line-left**: left chart edge → labels start
+- **price-line-right**: labels end → right chart edge
+
+This prevents the line from showing through transparent label backgrounds.
 
 ### OrderLineProperties
 
 ```typescript
 export interface OrderLineProperties {
-  line: OrderLineStyle
-  text: {
-    color: string
-    paddingLeft: number
-    paddingRight: number
-    paddingTop: number
-    paddingBottom: number
-    borderRadius: number
-    backgroundColor: string
-    content: string
-  }
+  price?: number
+  text?: string
+  quantity?: number | string
+  tooltip?: string
+  modifyTooltip?: string
+  cancelTooltip?: string
+
+  // Layout
+  align?: 'left' | 'right'
+  marginRight?: number
+  marginLeft?: number
+
+  // Behavior
+  editable?: boolean       // default: true (draggable)
+  extendLeft?: boolean
+
+  // Line
+  lineColor?: string
+  lineWidth?: number
+  lineStyle?: 'solid' | 'dashed'
+  lineDashedValue?: number[]
+  lineLength?: number
+
+  // Body label
+  bodyFont?: string
+  bodyFontSize?: number
+  bodyFontWeight?: number | string
+  bodyTextColor?: string
+  bodyBackgroundColor?: string
+  bodyBorderColor?: string
+  bodyPaddingLeft?: number
+  bodyPaddingRight?: number
+  bodyPaddingTop?: number
+  bodyPaddingBottom?: number
+  isBodyVisible?: boolean
+
+  // Quantity label
+  quantityFont?: string
+  quantityFontSize?: number
+  quantityFontWeight?: number | string
+  quantityTextColor?: string
+  quantityBackgroundColor?: string
+  quantityBorderColor?: string
+  quantityPaddingLeft?: number
+  quantityPaddingRight?: number
+  quantityPaddingTop?: number
+  quantityPaddingBottom?: number
+  isQuantityVisible?: boolean
+
+  // Cancel button
+  cancelButtonFontSize?: number
+  cancelButtonFontWeight?: number | string
+  cancelButtonIconColor?: string
+  cancelButtonBackgroundColor?: string
+  cancelButtonBorderColor?: string
+  cancelButtonPaddingLeft?: number
+  cancelButtonPaddingRight?: number
+  cancelButtonPaddingTop?: number
+  cancelButtonPaddingBottom?: number
+  isCancelButtonVisible?: boolean
+
+  // Shared border
+  borderStyle?: 'solid' | 'dashed'
+  borderSize?: number
+  borderDashedValue?: number[]
+  borderRadius?: number             // default: 0
+
+  // Events
+  onMoveStart?: OrderLineEventListener
+  onMove?: OrderLineEventListener
+  onMoveEnd?: OrderLineEventListener
+  onCancel?: OrderLineEventListener
+  onModify?: OrderLineEventListener
 }
 
-export interface OrderLineStyle {
-  color: string
-  style: 'solid' | 'dashed' | 'dotted'
-  size: number
+export interface OrderLineEventListener {
+  params: unknown
+  callback: (params: unknown, event?: OverlayEvent) => void
 }
 ```
 

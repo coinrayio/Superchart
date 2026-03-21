@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
-import type {Chart, TradeLine} from "@superchart"
+import type {Chart, TradeLine} from "@superchart/index"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
 import {createTrade, removeAllTrades} from "./overlays/trades"
 

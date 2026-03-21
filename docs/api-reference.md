@@ -450,11 +450,10 @@ See [data-loading.md](./data-loading.md) for full details.
 ### createOrderLine
 
 ```typescript
-// Re-exported from klinecharts
-function createOrderLine(chart: Chart, price: number, properties?: DeepPartial<OrderLineProperties>): OrderLine
+function createOrderLine(chart: Chart, options?: Partial<OrderLineProperties>): OrderLine
 ```
 
-Creates a horizontal price-line overlay used to display open orders. See [overlays.md](./overlays.md).
+Creates a horizontal price-level overlay with body, quantity, and cancel button sections. Returns a TradingView-compatible fluent API with getter/setter pairs. See [overlays.md](./overlays.md) for the full `OrderLine` interface and `OrderLineProperties`.
 
 ### loadLocale
 
