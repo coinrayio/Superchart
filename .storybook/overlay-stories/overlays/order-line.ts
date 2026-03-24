@@ -12,7 +12,8 @@ export interface MockOrder {
 
 export interface CreateOrderSettings {
   showLine: boolean
-  showLabels: boolean
+  showBody: boolean
+  showQuantity: boolean
   text?: string
   align?: "left" | "right"
   marginLeft?: number
@@ -49,7 +50,7 @@ export interface CreateOrderSettings {
 
 export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrderSettings): OrderLine {
   const {
-    showLine, showLabels,
+    showLine, showBody, showQuantity,
     text, align, marginLeft,
     lineColor, lineWidth, lineStyle,
     bodyTextColor, bodyBackgroundColor, bodyBorderColor,
@@ -64,18 +65,18 @@ export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrde
     text,
     align,
     marginLeft,
-    quantity: showLabels ? `@ ${order.price.toFixed(2)}` : undefined,
+    quantity: showQuantity ? `@ ${order.price.toFixed(2)}` : undefined,
     lineColor: showLine ? lineColor : "transparent",
     lineStyle: lineStyle ?? "dashed",
     lineWidth: lineWidth ?? 1,
     bodyBackgroundColor,
     bodyBorderColor,
     bodyTextColor,
-    isBodyVisible: showLabels,
+    isBodyVisible: showBody,
     quantityBackgroundColor,
     quantityBorderColor,
     quantityTextColor,
-    isQuantityVisible: showLabels,
+    isQuantityVisible: showQuantity,
     cancelButtonBackgroundColor,
     cancelButtonBorderColor,
     cancelButtonIconColor,

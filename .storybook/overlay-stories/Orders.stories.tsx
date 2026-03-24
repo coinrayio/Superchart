@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
-import type {Chart} from "@superchart/index"
+import type {Chart, OverlayEvent} from "@superchart/index"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
 import {useCurrentPrice} from "../helpers/useCurrentPrice"
 import {createOrder, type MockOrder, type OrderLine, removeOrder} from "./overlays/order-line"
@@ -45,7 +45,8 @@ function getScenario(scenario: Scenario, numOrders: number, currentPrice: number
 
 interface OrdersArgs {
   showOrders: boolean
-  showLabels: boolean
+  showBody: boolean
+  showQuantity: boolean
   showSide: boolean
   enableModify: boolean
   enableCanceling: boolean
@@ -94,7 +95,7 @@ function buildLabel(order: MockOrder, showSide: boolean): string {
 
 function OrdersDemo(args: OrdersArgs) {
   const {
-    showOrders, showLabels, showSide, enableModify,
+    showOrders, showBody, showQuantity, showSide, enableModify,
     enableCanceling, showLine, align, numOrders, scenario, symbol,
     buyLineColor, sellLineColor, lineWidth, lineStyle,
     bodyTextColor, buyBodyBackgroundColor, sellBodyBackgroundColor,
@@ -114,21 +115,23 @@ function OrdersDemo(args: OrdersArgs) {
   const handleOnModify = useCallback((p: unknown) => {
     const price = (p as { price: number }).price.toFixed(2)
     console.log(`[onModify] order at ${price}`)
-    alert(`Modify order at ${price}`)
   }, [])
 
   const handleOnCancel = useCallback((p: unknown) => {
     const price = (p as { price: number }).price.toFixed(2)
     console.log(`[onCancel] order at ${price}`)
-    alert(`Cancel order at ${price}`)
   }, [])
 
-  const handleOnMove = useCallback((_p: unknown) => {
-    console.log("[onMove] dragging order")
+  const handleOnMove = useCallback((_p: { index: number }, event?: OverlayEvent) => {
+    const newPrice = event?.overlay.points[0]?.value
+    console.log("[onMove] dragging order", newPrice)
   }, [])
 
-  const handleOnMoveEnd = useCallback((_p: unknown) => {
-    console.log("[onMoveEnd] moved order to new price")
+  const handleOnMoveEnd = useCallback((p: { index: number }, event?: OverlayEvent) => {
+    const newPrice = event?.overlay.points[0]?.value
+    if (newPrice === undefined) return
+    console.log("[onMoveEnd] moved order to new price", newPrice)
+    setOrders(prev => prev.map((o, i) => i === p.index ? {...o, price: newPrice} : o))
   }, [])
 
 
@@ -148,9 +151,11 @@ function OrdersDemo(args: OrdersArgs) {
     });
   }, [currentPrice])
 
-  const orders = useMemo(() => {
-    if (!initialPrice) return [];
-    return getScenario(scenario, numOrders, initialPrice);
+  const [orders, setOrders] = useState<MockOrder[]>([]);
+
+  useEffect(() => {
+    if (!initialPrice) return;
+    setOrders(getScenario(scenario, numOrders, initialPrice));
   }, [scenario, numOrders, initialPrice]);
 
 
@@ -159,13 +164,13 @@ function OrdersDemo(args: OrdersArgs) {
   const draw = useCallback((): OrderLine[] => {
     if (!chart) return []
 
-    return orders.map(order => {
+    return orders.map((order, index) => {
       const price = order.price
-      const text = showLabels ? (isCreating ? "Creating..." : buildLabel(order, showSide)) : undefined
+      const text = showBody ? (isCreating ? "Creating..." : buildLabel(order, showSide)) : undefined
       const isBuy = order.side === "buy"
 
       return createOrder(chart, order, {
-        showLine, showLabels,
+        showLine, showBody, showQuantity,
         text, align,
         lineColor: isBuy ? buyLineColor : sellLineColor,
         lineWidth,
@@ -183,12 +188,12 @@ function OrdersDemo(args: OrdersArgs) {
         borderSize,
         onModify: enableModify && !isCreating ? {params: {price}, callback: handleOnModify} : undefined,
         onCancel: enableCanceling && !isCreating ? {params: {price}, callback: handleOnCancel} : undefined,
-        onMove: {params: {price}, callback: handleOnMove},
-        onMoveEnd: {params: {price}, callback: handleOnMoveEnd},
+        onMove: {params: {index}, callback: handleOnMove},
+        onMoveEnd: {params: {index}, callback: handleOnMoveEnd},
       })
     })
   }, [
-    chart, showLabels, showSide, showLine, align,
+    chart, showBody, showQuantity, showSide, showLine, align,
     buyLineColor, sellLineColor, lineWidth, lineStyle,
     bodyTextColor, buyBodyBackgroundColor, sellBodyBackgroundColor,
     buyBodyBorderColor, sellBodyBorderColor,
@@ -219,7 +224,8 @@ const meta: Meta<typeof OrdersDemo> = {
   component: OrdersDemo,
   argTypes: {
     showOrders: {control: "boolean", table: {category: "Settings"}},
-    showLabels: {control: "boolean", table: {category: "Settings"}},
+    showBody: {control: "boolean", table: {category: "Settings"}},
+    showQuantity: {control: "boolean", table: {category: "Settings"}},
     showSide: {control: "boolean", table: {category: "Settings"}},
     enableModify: {control: "boolean", table: {category: "Settings"}},
     enableCanceling: {control: "boolean", table: {category: "Settings"}},
@@ -268,7 +274,8 @@ type Story = StoryObj<typeof OrdersDemo>
 export const Default: Story = {
   args: {
     showOrders: true,
-    showLabels: true,
+    showBody: true,
+    showQuantity: true,
     showSide: true,
     enableModify: true,
     enableCanceling: true,
