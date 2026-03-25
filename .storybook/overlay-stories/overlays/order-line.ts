@@ -16,6 +16,9 @@ export interface CreateOrderSettings {
   showQuantity: boolean
   text?: string
   align?: "left" | "right"
+  editable?: boolean
+  extendLeft?: boolean
+  extendRight?: boolean
   marginLeft?: number
 
   // Line
@@ -38,6 +41,12 @@ export interface CreateOrderSettings {
   cancelButtonBackgroundColor?: string
   cancelButtonBorderColor?: string
 
+  // Y-axis label
+  yAxisLabelTextColor?: string
+  yAxisLabelBackgroundColor?: string
+  yAxisLabelBorderColor?: string
+  yAxisLabelBorderSize?: number
+
   // Shared border
   borderRadius?: number
   borderSize?: number
@@ -51,11 +60,12 @@ export interface CreateOrderSettings {
 export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrderSettings): OrderLine {
   const {
     showLine, showBody, showQuantity,
-    text, align, marginLeft,
+    text, align, editable, extendLeft, extendRight, marginLeft,
     lineColor, lineWidth, lineStyle,
     bodyTextColor, bodyBackgroundColor, bodyBorderColor,
     quantityTextColor, quantityBackgroundColor, quantityBorderColor,
     cancelButtonIconColor, cancelButtonBackgroundColor, cancelButtonBorderColor,
+    yAxisLabelTextColor, yAxisLabelBackgroundColor, yAxisLabelBorderColor, yAxisLabelBorderSize,
     borderRadius, borderSize,
     onModify, onCancel, onMove, onMoveEnd
   } = settings
@@ -64,6 +74,9 @@ export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrde
     price: order.price,
     text,
     align,
+    editable,
+    extendLeft,
+    extendRight,
     marginLeft,
     quantity: showQuantity ? `@ ${order.price.toFixed(2)}` : undefined,
     lineColor: showLine ? lineColor : "transparent",
@@ -81,6 +94,10 @@ export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrde
     cancelButtonBorderColor,
     cancelButtonIconColor,
     isCancelButtonVisible: !!onCancel,
+    yAxisLabelTextColor,
+    yAxisLabelBackgroundColor,
+    yAxisLabelBorderColor,
+    yAxisLabelBorderSize,
     borderRadius: borderRadius ?? 0,
     borderSize,
     onModify,
