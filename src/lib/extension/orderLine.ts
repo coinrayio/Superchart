@@ -76,6 +76,7 @@ const orderLine = (): ProOverlayTemplate => {
   let properties: DeepPartial<OrderLineProperties> = {}
 
   const _extRef: { data: DeepPartial<OrderLineProperties> | null } = { data: null }
+  let _didMove = false
 
   const prop = <K extends keyof OrderLineProperties>(key: K): OrderLineProperties[K] => {
     const ext = _extRef.data as Record<string, unknown> | null
@@ -383,6 +384,7 @@ const orderLine = (): ProOverlayTemplate => {
     },
 
     onPressedMoveStart: (event) => {
+      _didMove = false
       const ext = (event.overlay.extendData != null && typeof event.overlay.extendData === 'object')
         ? event.overlay.extendData as DeepPartial<OrderLineProperties>
         : null
@@ -394,6 +396,7 @@ const orderLine = (): ProOverlayTemplate => {
     },
 
     onPressedMoving: (event) => {
+      _didMove = true
       const points = event.overlay.points
       if (points.length > 0 && points[0].value !== undefined) {
         properties.price = points[0].value
@@ -409,6 +412,10 @@ const orderLine = (): ProOverlayTemplate => {
     },
 
     onPressedMoveEnd: (event) => {
+      // Only fire onMoveEnd if the user actually dragged (onPressedMoving was called).
+      // A simple click triggers onPressedMoveStart → onPressedMoveEnd without moving.
+      if (!_didMove) return false
+      _didMove = false
       const ext = (event.overlay.extendData != null && typeof event.overlay.extendData === 'object')
         ? event.overlay.extendData as DeepPartial<OrderLineProperties>
         : null

@@ -122,16 +122,17 @@ function OrdersDemo(args: OrdersArgs) {
     console.log(`[onCancel] order at ${price}`)
   }, [])
 
-  const handleOnMove = useCallback((_p: { index: number }, event?: OverlayEvent) => {
+  const handleOnMove = useCallback((_p: unknown, event?: OverlayEvent<unknown>) => {
     const newPrice = event?.overlay.points[0]?.value
     console.log("[onMove] dragging order", newPrice)
   }, [])
 
-  const handleOnMoveEnd = useCallback((p: { index: number }, event?: OverlayEvent) => {
+  const handleOnMoveEnd = useCallback((p: unknown, event?: OverlayEvent<unknown>) => {
     const newPrice = event?.overlay.points[0]?.value
     if (newPrice === undefined) return
+    const index = (p as { index: number }).index
     console.log("[onMoveEnd] moved order to new price", newPrice)
-    setOrders(prev => prev.map((o, i) => i === p.index ? {...o, price: newPrice} : o))
+    setOrders(prev => prev.map((o, i) => i === index ? {...o, price: newPrice} : o))
   }, [])
 
 
