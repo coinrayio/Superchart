@@ -52,6 +52,8 @@ interface OrdersArgs {
   enableModify: boolean
   enableCanceling: boolean
   showLine: boolean
+  extendLeft: boolean
+  extendRight: boolean
   align: "left" | "right"
   numOrders: number
   scenario: Scenario
@@ -84,6 +86,12 @@ interface OrdersArgs {
   buyCancelBorderColor: string
   sellCancelBorderColor: string
 
+  // Y-axis label
+  yAxisLabelTextColor: string
+  yAxisLabelBackgroundColor: string
+  yAxisLabelBorderColor: string
+  yAxisLabelBorderSize: number
+
   // Shared border
   borderRadius: number
   borderSize: number
@@ -97,7 +105,7 @@ function buildLabel(order: MockOrder, showSide: boolean): string {
 function OrdersDemo(args: OrdersArgs) {
   const {
     showOrders, showBody, showQuantity, showSide, editable, enableModify,
-    enableCanceling, showLine, align, numOrders, scenario, symbol,
+    enableCanceling, showLine, extendLeft, extendRight, align, numOrders, scenario, symbol,
     buyLineColor, sellLineColor, lineWidth, lineStyle,
     bodyTextColor, buyBodyBackgroundColor, sellBodyBackgroundColor,
     buyBodyBorderColor, sellBodyBorderColor,
@@ -105,6 +113,7 @@ function OrdersDemo(args: OrdersArgs) {
     buyQuantityBorderColor, sellQuantityBorderColor,
     cancelButtonIconColor, buyCancelBackgroundColor, sellCancelBackgroundColor,
     buyCancelBorderColor, sellCancelBorderColor,
+    yAxisLabelTextColor, yAxisLabelBackgroundColor, yAxisLabelBorderColor, yAxisLabelBorderSize,
     borderRadius, borderSize,
   } = args
   const [chart, setChart] = useState<Chart | null>(null)
@@ -173,7 +182,7 @@ function OrdersDemo(args: OrdersArgs) {
 
       return createOrder(chart, order, {
         showLine, showBody, showQuantity,
-        text, align, editable,
+        text, align, editable, extendLeft, extendRight,
         lineColor: isBuy ? buyLineColor : sellLineColor,
         lineWidth,
         lineStyle,
@@ -186,6 +195,10 @@ function OrdersDemo(args: OrdersArgs) {
         cancelButtonIconColor,
         cancelButtonBackgroundColor: isBuy ? buyCancelBackgroundColor : sellCancelBackgroundColor,
         cancelButtonBorderColor: isBuy ? buyCancelBorderColor : sellCancelBorderColor,
+        yAxisLabelTextColor,
+        yAxisLabelBackgroundColor,
+        yAxisLabelBorderColor,
+        yAxisLabelBorderSize,
         borderRadius,
         borderSize,
         onModify: enableModify && !isCreating ? {params: {price}, callback: handleOnModify} : undefined,
@@ -204,7 +217,9 @@ function OrdersDemo(args: OrdersArgs) {
     cancelButtonIconColor, buyCancelBackgroundColor, sellCancelBackgroundColor,
     buyCancelBorderColor, sellCancelBorderColor,
     borderRadius, borderSize,
-    editable, enableCanceling, enableModify,
+    editable, extendLeft, extendRight,
+    yAxisLabelTextColor, yAxisLabelBackgroundColor, yAxisLabelBorderColor, yAxisLabelBorderSize,
+    enableCanceling, enableModify,
     isCreating, orders,
     handleOnModify, handleOnCancel, handleOnMove, handleOnMoveEnd,
   ])
@@ -233,6 +248,8 @@ const meta: Meta<typeof OrdersDemo> = {
     enableModify: {control: "boolean", table: {category: "Settings"}},
     enableCanceling: {control: "boolean", table: {category: "Settings"}},
     showLine: {control: "boolean", table: {category: "Settings"}},
+    extendLeft: {control: "boolean", table: {category: "Settings"}},
+    extendRight: {control: "boolean", table: {category: "Settings"}},
     align: {control: "select", options: ["left", "right"], table: {category: "Layout"}},
     numOrders: {control: {type: "number", min: 1, max: 5}, table: {category: "Demo Data"}},
     scenario: {control: "select", options: ["limit", "creating", "stacked"], table: {category: "Demo Data"}},
@@ -265,6 +282,12 @@ const meta: Meta<typeof OrdersDemo> = {
     buyCancelBorderColor: {control: "color", table: {category: "Cancel Button"}},
     sellCancelBorderColor: {control: "color", table: {category: "Cancel Button"}},
 
+    // Y-axis label
+    yAxisLabelTextColor: {control: "color", table: {category: "Y-Axis Label"}},
+    yAxisLabelBackgroundColor: {control: "color", table: {category: "Y-Axis Label"}},
+    yAxisLabelBorderColor: {control: "color", table: {category: "Y-Axis Label"}},
+    yAxisLabelBorderSize: {control: {type: "number", min: 0, max: 5}, table: {category: "Y-Axis Label"}},
+
     // Shared border
     borderRadius: {control: {type: "number", min: 0, max: 10}, table: {category: "Border"}},
     borderSize: {control: {type: "number", min: 0, max: 5}, table: {category: "Border"}},
@@ -284,6 +307,8 @@ export const Default: Story = {
     enableModify: true,
     enableCanceling: true,
     showLine: true,
+    extendLeft: true,
+    extendRight: true,
     align: "right",
     numOrders: 3,
     scenario: "limit",
@@ -315,6 +340,12 @@ export const Default: Story = {
     sellCancelBackgroundColor: "#f44336",
     buyCancelBorderColor: "#FFFFFF",
     sellCancelBorderColor: "#FFFFFF",
+
+    // Y-axis label
+    yAxisLabelTextColor: "#FFFFFF",
+    yAxisLabelBackgroundColor: "#4caf50",
+    yAxisLabelBorderColor: "#4caf50",
+    yAxisLabelBorderSize: 0,
 
     // Border
     borderRadius: 0,

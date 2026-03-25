@@ -130,6 +130,10 @@ const orderLine = (): ProOverlayTemplate => {
       const isQuantityVisible = prop('isQuantityVisible') !== false
       const isCancelVisible = prop('isCancelButtonVisible') !== false
 
+      // --- Line extension (default: both true) ---
+      const extendLeft = prop('extendLeft') !== false
+      const extendRight = prop('extendRight') !== false
+
       // --- Shared label style builder ---
       // Uses klinecharts TextStyle property names: size, family, weight
       const labelStyle = (type: 'body' | 'quantity' | 'cancel-button'): Record<string, unknown> => {
@@ -263,7 +267,7 @@ const orderLine = (): ProOverlayTemplate => {
         }
 
         // Price line left: from left edge to labels start
-        if (Number(marginLeft) > 0) {
+        if (extendLeft && Number(marginLeft) > 0) {
           figures.push({
             type: 'line', key: 'price-line-left',
             attrs: { coordinates: [{ x: 0, y }, { x: Number(marginLeft), y }] },
@@ -272,27 +276,33 @@ const orderLine = (): ProOverlayTemplate => {
         }
 
         // Price line right: from labels end to right edge
-        figures.push({
-          type: 'line', key: 'price-line-right',
-          attrs: { coordinates: [{ x: cursor, y }, { x: bounding.width, y }] },
-          styles: lineStyles, ignoreEvent: true
-        })
+        if (extendRight) {
+          figures.push({
+            type: 'line', key: 'price-line-right',
+            attrs: { coordinates: [{ x: cursor, y }, { x: bounding.width, y }] },
+            styles: lineStyles, ignoreEvent: true
+          })
+        }
       } else {
         // --- Right alignment (default) ---
 
         // Price line left: from left edge to labels start
-        figures.push({
-          type: 'line', key: 'price-line-left',
-          attrs: { coordinates: [{ x: 0, y }, { x: bounding.width - lineMarginRight, y }] },
-          styles: lineStyles, ignoreEvent: true
-        })
+        if (extendLeft) {
+          figures.push({
+            type: 'line', key: 'price-line-left',
+            attrs: { coordinates: [{ x: 0, y }, { x: bounding.width - lineMarginRight, y }] },
+            styles: lineStyles, ignoreEvent: true
+          })
+        }
 
         // Price line right: from labels end to right edge
-        figures.push({
-          type: 'line', key: 'price-line-right',
-          attrs: { coordinates: [{ x: bounding.width - (marginRight - borderSize), y }, { x: bounding.width, y }] },
-          styles: lineStyles, ignoreEvent: true
-        })
+        if (extendRight) {
+          figures.push({
+            type: 'line', key: 'price-line-right',
+            attrs: { coordinates: [{ x: bounding.width - (marginRight - borderSize), y }, { x: bounding.width, y }] },
+            styles: lineStyles, ignoreEvent: true
+          })
+        }
 
         if (isBodyVisible) {
           figures.push({
@@ -343,21 +353,26 @@ const orderLine = (): ProOverlayTemplate => {
       }
 
       const lineColor = prop('lineColor') ?? defaultOrderLineStyle.lineColor
-      const bodyTextColor = prop('bodyTextColor') ?? defaultOrderLineStyle.bodyTextColor
       const bodySize = prop('bodyFontSize') ?? defaultOrderLineStyle.bodySize
       const bodyFont = prop('bodyFont') ?? defaultOrderLineStyle.bodyFont
+
+      const yTextColor = prop('yAxisLabelTextColor') ?? '#FFFFFF'
+      const yBgColor = prop('yAxisLabelBackgroundColor') ?? lineColor
+      const yBorderColor = prop('yAxisLabelBorderColor') ?? lineColor
+      const yBorderSize = prop('yAxisLabelBorderSize') ?? 0
 
       return [
         {
           type: 'text',
           attrs: { x: 0, y, text: priceText, align: 'left', baseline: 'middle' },
           styles: {
-            style: 'fill',
-            color: bodyTextColor,
+            style: yBorderSize > 0 ? 'stroke_fill' : 'fill',
+            color: yTextColor,
             size: bodySize,
             family: bodyFont,
-            backgroundColor: lineColor,
-            borderColor: lineColor,
+            backgroundColor: yBgColor,
+            borderColor: yBorderColor,
+            borderSize: yBorderSize,
             paddingLeft: 4,
             paddingRight: 4,
             paddingTop: 2,

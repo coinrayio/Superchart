@@ -81,11 +81,19 @@ export interface OrderLineProperties {
   borderDashedValue?: number[]
   borderRadius?: number
 
+  // -- Y-axis label styling --
+  yAxisLabelTextColor?: string
+  yAxisLabelBackgroundColor?: string
+  yAxisLabelBorderColor?: string
+  yAxisLabelBorderSize?: number
+
   // -- Behavior (matches TradingView API) --
   /** Whether the line can be dragged to a new price (default: true) */
   editable?: boolean
-  /** Extend the line leftward past the visible range */
+  /** Extend the price line to the left of the labels (default: true) */
   extendLeft?: boolean
+  /** Extend the price line to the right of the labels (default: true) */
+  extendRight?: boolean
   /** Tooltip text for the cancel button */
   cancelTooltip?: string
 
@@ -126,6 +134,17 @@ export interface OrderLine {
   setEditable: (editable: boolean) => OrderLine
   getExtendLeft: () => boolean
   setExtendLeft: (extend: boolean) => OrderLine
+  getExtendRight: () => boolean
+  setExtendRight: (extend: boolean) => OrderLine
+
+  // -- Y-axis label styling --
+  getYAxisLabelTextColor: () => string | undefined
+  setYAxisLabelTextColor: (color: string) => OrderLine
+  getYAxisLabelBackgroundColor: () => string | undefined
+  setYAxisLabelBackgroundColor: (color: string) => OrderLine
+  getYAxisLabelBorderColor: () => string | undefined
+  setYAxisLabelBorderColor: (color: string) => OrderLine
+  setYAxisLabelBorderSize: (size: number) => OrderLine
 
   // -- Layout --
   setAlign: (align: 'left' | 'right') => OrderLine
@@ -313,8 +332,23 @@ export function createOrderLine (
       return self
     },
 
-    getExtendLeft (): boolean { return properties.extendLeft === true },
+    getExtendLeft (): boolean { return properties.extendLeft !== false },
     setExtendLeft (extend: boolean): OrderLine { properties.extendLeft = extend; update(); return self },
+
+    getExtendRight (): boolean { return properties.extendRight !== false },
+    setExtendRight (extend: boolean): OrderLine { properties.extendRight = extend; update(); return self },
+
+    // -- Y-axis label styling --
+    getYAxisLabelTextColor (): string | undefined { return properties.yAxisLabelTextColor },
+    setYAxisLabelTextColor (color: string): OrderLine { properties.yAxisLabelTextColor = color; update(); return self },
+
+    getYAxisLabelBackgroundColor (): string | undefined { return properties.yAxisLabelBackgroundColor },
+    setYAxisLabelBackgroundColor (color: string): OrderLine { properties.yAxisLabelBackgroundColor = color; update(); return self },
+
+    getYAxisLabelBorderColor (): string | undefined { return properties.yAxisLabelBorderColor },
+    setYAxisLabelBorderColor (color: string): OrderLine { properties.yAxisLabelBorderColor = color; update(); return self },
+
+    setYAxisLabelBorderSize (size: number): OrderLine { properties.yAxisLabelBorderSize = size; update(); return self },
 
     // -- Layout --
     setAlign (align: 'left' | 'right'): OrderLine { properties.align = align; update(); return self },
