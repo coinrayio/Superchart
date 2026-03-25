@@ -1,4 +1,4 @@
-import type {Chart} from "@superchart"
+import type {Chart} from "@superchart/index"
 import {createPriceLine, type PriceLine} from "@superchart/index"
 
 export function createBreakEven(chart: Chart, price: number, color = "#D05DDF"): PriceLine {
