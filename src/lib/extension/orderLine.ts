@@ -374,10 +374,10 @@ const orderLine = (): ProOverlayTemplate => {
             backgroundColor: yBgColor,
             borderColor: yBorderColor,
             borderSize: yBorderSize,
-            paddingLeft: 4,
-            paddingRight: 4,
-            paddingTop: 2,
-            paddingBottom: 2,
+            paddingLeft: 5,
+            paddingRight: 5,
+            paddingTop: 5,
+            paddingBottom: 5,
             borderRadius
           }
         }
