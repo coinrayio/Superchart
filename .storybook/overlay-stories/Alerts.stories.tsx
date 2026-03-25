@@ -1,8 +1,8 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
-import type {Chart, OverlayEvent} from "@superchart"
+import type {Chart, OverlayEvent, TradeLine} from "@superchart"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
-import {createTimeAlertLine, createTrendlineAlertLine, removeOverlay} from "./overlays/alerts"
+import {createTimeAlertLine, createTrendlineAlertLine, createTriggeredPriceAlert, removeAllTriggeredAlerts, removeOverlay} from "./overlays/alerts"
 import {useCurrentPrice} from "../helpers/useCurrentPrice"
 
 function formatAlertLabel(ts: number): string {
@@ -184,6 +184,70 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, symbol}: Trendli
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
 
+// --- Triggered Price Alert ---
+
+interface TriggeredPriceAlertArgs {
+  numAlerts: number
+  spacingHours: number
+  color: string
+  symbol: string
+}
+
+function TriggeredPriceAlertDemo({numAlerts, spacingHours, color, symbol}: TriggeredPriceAlertArgs) {
+  const [chart, setChart] = useState<Chart | null>(null)
+  const linesRef = useRef<TradeLine[]>([])
+
+  const onChart = useCallback((c: Chart) => setChart(c), [])
+
+  useEffect(() => {
+    if (!chart) return
+
+    const create = (chart: Chart) => {
+      const dataList = chart.getDataList()
+      if (!dataList.length) return
+
+      const nowMs = Date.now()
+      for (let i = 0; i < numAlerts; i++) {
+        const timeMs = nowMs - (i + 1) * spacingHours * 3600 * 1000
+        let match = dataList[0]
+        for (const bar of dataList) {
+          if (bar.timestamp <= timeMs) match = bar
+          else break
+        }
+
+        const price = i % 2 === 0 ? match.high : match.low
+        const line = createTriggeredPriceAlert(chart, match.timestamp, price, {color})
+        if (line) linesRef.current.push(line)
+      }
+    }
+
+    removeAllTriggeredAlerts(chart)
+    linesRef.current = []
+
+    const dataList = chart.getDataList()
+    if (dataList.length) {
+      create(chart)
+    } else {
+      const timer = setTimeout(() => create(chart), 500)
+      return () => clearTimeout(timer)
+    }
+
+    return () => {
+      removeAllTriggeredAlerts(chart)
+      linesRef.current = []
+    }
+  }, [chart, numAlerts, spacingHours])
+
+  // Style updates via fluent setters
+  useEffect(() => {
+    for (const line of linesRef.current) {
+      line.setColor(color)
+    }
+  }, [color])
+
+  return <SuperchartCanvas symbol={symbol} onChart={onChart} />
+}
+
 // --- Meta ---
 
 const meta: Meta = {
@@ -229,6 +293,22 @@ export const TrendlineAlert: StoryObj<typeof TrendlineAlertDemo> = {
     color: "#3ea6ff",
     lineWidth: 1,
     lineStyle: "solid",
+    symbol: "BINA_USDT_BTC",
+  },
+}
+
+export const TriggeredPriceAlert: StoryObj<typeof TriggeredPriceAlertDemo> = {
+  render: (args) => <TriggeredPriceAlertDemo {...args} />,
+  argTypes: {
+    numAlerts: {control: {type: "number", min: 1, max: 20, step: 1}, table: {category: "Demo Data"}},
+    spacingHours: {control: {type: "number", min: 0.5, step: 0.5}, table: {category: "Demo Data"}},
+    color: {control: "color", table: {category: "Colors"}},
+    symbol: {control: "text", table: {category: "Chart"}},
+  },
+  args: {
+    numAlerts: 4,
+    spacingHours: 3,
+    color: "#00BFFF",
     symbol: "BINA_USDT_BTC",
   },
 }

@@ -1,4 +1,5 @@
-import type {Chart, Nullable, OverlayEvent} from "@superchart"
+import type {Chart, Nullable, OverlayEvent, TradeLine, TradeLineProperties} from "@superchart"
+import {createTradeLine} from "@superchart"
 
 export interface TimeAlertLineOptions {
   color?: string
@@ -87,6 +88,36 @@ export function createTrendlineAlertLine(
     lock,
     ...callbacks,
   }) as Nullable<string>
+}
+
+// Triggered price alert (tradeLine arrow marker — matches chart-controller.createTriggeredAlert)
+export interface TriggeredPriceAlertOptions {
+  color?: string
+}
+
+export function createTriggeredPriceAlert(
+  chart: Chart,
+  timestamp: number,
+  price: number,
+  options: TriggeredPriceAlertOptions = {},
+): Nullable<TradeLine> {
+  const {color = "#00BFFF"} = options
+
+  const props: Partial<TradeLineProperties> = {
+    direction: "up",
+    arrowType: "wide",
+    color,
+    text: "",
+    gap: 4,
+    timestamp,
+    price,
+  }
+
+  return createTradeLine(chart, props)
+}
+
+export function removeAllTriggeredAlerts(chart: Chart): void {
+  chart.removeOverlay({name: "tradeLine"})
 }
 
 export function removeOverlay(chart: Chart, id: string): void {
