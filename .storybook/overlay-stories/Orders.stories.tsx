@@ -48,6 +48,7 @@ interface OrdersArgs {
   showBody: boolean
   showQuantity: boolean
   showSide: boolean
+  editable: boolean
   enableModify: boolean
   enableCanceling: boolean
   showLine: boolean
@@ -95,7 +96,7 @@ function buildLabel(order: MockOrder, showSide: boolean): string {
 
 function OrdersDemo(args: OrdersArgs) {
   const {
-    showOrders, showBody, showQuantity, showSide, enableModify,
+    showOrders, showBody, showQuantity, showSide, editable, enableModify,
     enableCanceling, showLine, align, numOrders, scenario, symbol,
     buyLineColor, sellLineColor, lineWidth, lineStyle,
     bodyTextColor, buyBodyBackgroundColor, sellBodyBackgroundColor,
@@ -172,7 +173,7 @@ function OrdersDemo(args: OrdersArgs) {
 
       return createOrder(chart, order, {
         showLine, showBody, showQuantity,
-        text, align,
+        text, align, editable,
         lineColor: isBuy ? buyLineColor : sellLineColor,
         lineWidth,
         lineStyle,
@@ -203,7 +204,7 @@ function OrdersDemo(args: OrdersArgs) {
     cancelButtonIconColor, buyCancelBackgroundColor, sellCancelBackgroundColor,
     buyCancelBorderColor, sellCancelBorderColor,
     borderRadius, borderSize,
-    enableCanceling, enableModify,
+    editable, enableCanceling, enableModify,
     isCreating, orders,
     handleOnModify, handleOnCancel, handleOnMove, handleOnMoveEnd,
   ])
@@ -228,6 +229,7 @@ const meta: Meta<typeof OrdersDemo> = {
     showBody: {control: "boolean", table: {category: "Settings"}},
     showQuantity: {control: "boolean", table: {category: "Settings"}},
     showSide: {control: "boolean", table: {category: "Settings"}},
+    editable: {control: "boolean", table: {category: "Settings"}},
     enableModify: {control: "boolean", table: {category: "Settings"}},
     enableCanceling: {control: "boolean", table: {category: "Settings"}},
     showLine: {control: "boolean", table: {category: "Settings"}},
@@ -278,6 +280,7 @@ export const Default: Story = {
     showBody: true,
     showQuantity: true,
     showSide: true,
+    editable: true,
     enableModify: true,
     enableCanceling: true,
     showLine: true,

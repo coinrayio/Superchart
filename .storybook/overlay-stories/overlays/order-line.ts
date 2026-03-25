@@ -16,6 +16,7 @@ export interface CreateOrderSettings {
   showQuantity: boolean
   text?: string
   align?: "left" | "right"
+  editable?: boolean
   marginLeft?: number
 
   // Line
@@ -51,7 +52,7 @@ export interface CreateOrderSettings {
 export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrderSettings): OrderLine {
   const {
     showLine, showBody, showQuantity,
-    text, align, marginLeft,
+    text, align, editable, marginLeft,
     lineColor, lineWidth, lineStyle,
     bodyTextColor, bodyBackgroundColor, bodyBorderColor,
     quantityTextColor, quantityBackgroundColor, quantityBorderColor,
@@ -64,6 +65,7 @@ export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrde
     price: order.price,
     text,
     align,
+    editable,
     marginLeft,
     quantity: showQuantity ? `@ ${order.price.toFixed(2)}` : undefined,
     lineColor: showLine ? lineColor : "transparent",
