@@ -18,7 +18,8 @@
     "dist"
   ],
   "sideEffects": [
-    "**/*.css"
+    "**/*.css",
+    "src/lib/extension/index.ts"
   ],
   "scripts": {
     "dev": "vite",

@@ -353,6 +353,7 @@ const orderLine = (): ProOverlayTemplate => {
       }
 
       const lineColor = prop('lineColor') ?? defaultOrderLineStyle.lineColor
+      const borderRadius = prop('borderRadius') ?? defaultOrderLineStyle.borderRadius
       const bodySize = prop('bodyFontSize') ?? defaultOrderLineStyle.bodySize
       const bodyFont = prop('bodyFont') ?? defaultOrderLineStyle.bodyFont
 
@@ -377,7 +378,7 @@ const orderLine = (): ProOverlayTemplate => {
             paddingRight: 4,
             paddingTop: 2,
             paddingBottom: 2,
-            borderRadius: 2
+            borderRadius
           }
         }
       ]
