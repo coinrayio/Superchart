@@ -10,6 +10,7 @@
     "strict": true,
     "baseUrl": "..",
     "paths": {
+      "@superchart": ["src/lib/index.ts"],
       "@superchart/*": ["src/lib/*"]
     }
   },
