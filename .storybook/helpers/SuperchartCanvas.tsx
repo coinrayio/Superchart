@@ -1,4 +1,4 @@
-import {useEffect, useRef} from "react"
+import {useEffect, useRef, useState} from "react"
 import {Superchart, createDataLoader} from "@superchart/index"
 import type {Chart} from "@superchart/index"
 import type {SymbolInfo, Period, VisibleTimeRange} from "@superchart/index"
@@ -52,7 +52,7 @@ interface Props {
 export function SuperchartCanvas({
   symbol = "BINA_USDT_BTC",
   period = "1H",
-  theme = "dark",
+  theme: themeProp = "dark",
   visibleRange,
   onReady,
   onChart,
@@ -61,6 +61,7 @@ export function SuperchartCanvas({
   onVisibleRangeChange,
   onContextMenu,
 }: Props) {
+  const [theme, setTheme] = useState<"dark" | "light">(themeProp)
   const containerRef = useRef<HTMLDivElement>(null)
   const superchartRef = useRef<Superchart | null>(null)
   const mountedRef = useRef(false)
@@ -161,7 +162,12 @@ export function SuperchartCanvas({
     superchartRef.current.setVisibleRange(visibleRange)
   }, [visibleRange])
 
-  // Sync theme changes
+  // Sync theme prop from outside
+  useEffect(() => {
+    setTheme(themeProp)
+  }, [themeProp])
+
+  // Sync theme changes to superchart
   useEffect(() => {
     if (!mountedRef.current || !superchartRef.current) return
     superchartRef.current.setTheme(theme)
@@ -175,5 +181,43 @@ export function SuperchartCanvas({
     )
   }
 
-  return <div ref={containerRef} style={{width: "100%", height: "100vh"}} />
+  const isDark = theme === "dark"
+
+  return (
+    <div style={{width: "100%", height: "100vh", display: "flex", flexDirection: "column"}}>
+      <div ref={containerRef} style={{width: "100%", flex: 1}} />
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        background: isDark ? "#1e1e1e" : "#f0f0f0",
+        borderTop: `1px solid ${isDark ? "#333" : "#ccc"}`,
+      }}>
+        <span style={{fontSize: 12, color: isDark ? "#aaa" : "#555", fontFamily: "monospace"}}>
+          Theme
+        </span>
+        {(["dark", "light"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTheme(t)}
+            style={{
+              padding: "3px 10px",
+              fontSize: 12,
+              fontFamily: "monospace",
+              cursor: "pointer",
+              border: `1px solid ${isDark ? "#555" : "#bbb"}`,
+              borderRadius: 4,
+              background: theme === t
+                ? (isDark ? "#4a9eff" : "#0066cc")
+                : (isDark ? "#2a2a2a" : "#e0e0e0"),
+              color: theme === t ? "#fff" : (isDark ? "#ccc" : "#333"),
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
