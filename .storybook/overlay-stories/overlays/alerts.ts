@@ -1,5 +1,13 @@
-import type {Chart, Nullable, OverlayEvent, TradeLine, TradeLineProperties} from "@superchart"
+import type {Chart, Nullable, Overlay, OverlayEvent, TradeLine, TradeLineProperties} from "@superchart"
 import {createTradeLine} from "@superchart"
+
+// Workaround: segment and verticalStraightLine don't respect styles.line.* passed via
+// createOverlay. Use setProperties after creation to apply line colors/styles.
+// Remove this when SC natively supports styles on Pro overlays.
+function applyProperties(chart: Chart, id: string, props: Record<string, unknown>): void {
+  const overlay = chart.getOverlays({id})[0] as Overlay & {setProperties?: (p: Record<string, unknown>, id: string) => void}
+  if (overlay?.setProperties) overlay.setProperties(props, id)
+}
 
 export interface TimeAlertLineOptions {
   color?: string
@@ -10,13 +18,13 @@ export interface TimeAlertLineOptions {
   textBackgroundColor?: string
   textFontSize?: number
   lock?: boolean
-  onPressedMoveStart?: (event: OverlayEvent) => boolean | void
-  onPressedMoving?: (event: OverlayEvent) => boolean | void
-  onPressedMoveEnd?: (event: OverlayEvent) => boolean | void
-  onSelected?: (event: OverlayEvent) => boolean | void
-  onDeselected?: (event: OverlayEvent) => boolean | void
-  onClick?: (event: OverlayEvent) => boolean | void
-  onRightClick?: (event: OverlayEvent) => boolean | void
+  onPressedMoveStart?: (event: OverlayEvent<unknown>) => boolean | void
+  onPressedMoving?: (event: OverlayEvent<unknown>) => boolean | void
+  onPressedMoveEnd?: (event: OverlayEvent<unknown>) => boolean | void
+  onSelected?: (event: OverlayEvent<unknown>) => boolean | void
+  onDeselected?: (event: OverlayEvent<unknown>) => boolean | void
+  onClick?: (event: OverlayEvent<unknown>) => boolean | void
+  onRightClick?: (event: OverlayEvent<unknown>) => boolean | void
 }
 
 export function createTimeAlertLine(
@@ -36,17 +44,14 @@ export function createTimeAlertLine(
     ...callbacks
   } = options
 
-  return chart.createOverlay({
+  const id = chart.createOverlay({
     name: "verticalStraightLine",
     points: [{timestamp, value: 0}],
-    styles: {
-      line: {color, size: lineWidth, style: lineStyle},
-      text: {color: textColor, backgroundColor: textBackgroundColor, size: textFontSize},
-    },
-    extendData: text,
     lock,
     ...callbacks,
   }) as Nullable<string>
+  if (id) applyProperties(chart, id, {lineColor: color, lineWidth, lineStyle})
+  return id
 }
 
 // Trendline alert (segment with two draggable points, callbacks)
@@ -56,14 +61,18 @@ export interface TrendlineAlertLineOptions {
   color?: string
   lineWidth?: number
   lineStyle?: "solid" | "dashed"
+  text?: string
+  textColor?: string
+  textBackgroundColor?: string
+  textFontSize?: number
   lock?: boolean
-  onPressedMoveStart?: (event: OverlayEvent) => boolean | void
-  onPressedMoving?: (event: OverlayEvent) => boolean | void
-  onPressedMoveEnd?: (event: OverlayEvent) => boolean | void
-  onSelected?: (event: OverlayEvent) => boolean | void
-  onDeselected?: (event: OverlayEvent) => boolean | void
-  onClick?: (event: OverlayEvent) => boolean | void
-  onRightClick?: (event: OverlayEvent) => boolean | void
+  onPressedMoveStart?: (event: OverlayEvent<unknown>) => boolean | void
+  onPressedMoving?: (event: OverlayEvent<unknown>) => boolean | void
+  onPressedMoveEnd?: (event: OverlayEvent<unknown>) => boolean | void
+  onSelected?: (event: OverlayEvent<unknown>) => boolean | void
+  onDeselected?: (event: OverlayEvent<unknown>) => boolean | void
+  onClick?: (event: OverlayEvent<unknown>) => boolean | void
+  onRightClick?: (event: OverlayEvent<unknown>) => boolean | void
 }
 
 export function createTrendlineAlertLine(
@@ -75,19 +84,22 @@ export function createTrendlineAlertLine(
     color = "#3ea6ff",
     lineWidth = 1,
     lineStyle = "solid",
+    text,
+    textColor = "#FFFFFF",
+    textBackgroundColor = "#3ea6ff",
+    textFontSize = 12,
     lock = false,
     ...callbacks
   } = options
 
-  return chart.createOverlay({
+  const id = chart.createOverlay({
     name: "segment",
     points,
-    styles: {
-      line: {color, size: lineWidth, style: lineStyle},
-    },
     lock,
     ...callbacks,
   }) as Nullable<string>
+  if (id) applyProperties(chart, id, {lineColor: color, lineWidth, lineStyle})
+  return id
 }
 
 // Triggered price alert (tradeLine arrow marker — matches chart-controller.createTriggeredAlert)

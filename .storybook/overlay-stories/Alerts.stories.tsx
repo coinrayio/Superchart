@@ -39,7 +39,7 @@ function TimeAlertDemo({lock, color, textColor, textBackgroundColor, textFontSiz
     idsRef.current = []
   }
 
-  const handlePressedMoveEnd = useCallback((event: OverlayEvent) => {
+  const handlePressedMoveEnd = useCallback((event: OverlayEvent<unknown>) => {
     const ts = event?.overlay?.points?.[0]?.timestamp
     if (ts) {
       console.log("[onPressedMoveEnd] new timestamp:", ts, new Date(ts).toISOString())
@@ -47,24 +47,24 @@ function TimeAlertDemo({lock, color, textColor, textBackgroundColor, textFontSiz
     }
   }, [])
 
-  const handlePressedMoving = useCallback((event: OverlayEvent) => {
+  const handlePressedMoving = useCallback((event: OverlayEvent<unknown>) => {
     const ts = event?.overlay?.points?.[0]?.timestamp
     console.log("[onPressedMoving] timestamp:", ts)
   }, [])
 
-  const handleSelected = useCallback((event: OverlayEvent) => {
+  const handleSelected = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onSelected] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleDeselected = useCallback((event: OverlayEvent) => {
+  const handleDeselected = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onDeselected] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleClick = useCallback((event: OverlayEvent) => {
+  const handleClick = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onClick] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleRightClick = useCallback((event: OverlayEvent) => {
+  const handleRightClick = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onRightClick] overlay:", event?.overlay?.id)
   }, [])
 
@@ -99,10 +99,14 @@ interface TrendlineAlertArgs {
   color: string
   lineWidth: number
   lineStyle: "solid" | "dashed"
+  text: string
+  textColor: string
+  textBackgroundColor: string
+  textFontSize: number
   symbol: string
 }
 
-function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, symbol}: TrendlineAlertArgs) {
+function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor, textBackgroundColor, textFontSize, symbol}: TrendlineAlertArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
   const currentPrice = useCurrentPrice(chart)
   const [points, setPoints] = useState<[{timestamp: number, value: number}, {timestamp: number, value: number}] | null>(null)
@@ -130,36 +134,36 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, symbol}: Trendli
     ])
   }, [chart, currentPrice, points])
 
-  const handlePressedMoveEnd = useCallback((event: OverlayEvent) => {
+  const handlePressedMoveEnd = useCallback((event: OverlayEvent<unknown>) => {
     const pts = event?.overlay?.points
     if (pts && pts.length >= 2) {
-      const p1 = {timestamp: pts[0].timestamp, value: pts[0].value}
-      const p2 = {timestamp: pts[1].timestamp, value: pts[1].value}
+      const p1 = {timestamp: pts[0].timestamp!, value: pts[0].value!}
+      const p2 = {timestamp: pts[1].timestamp!, value: pts[1].value!}
       console.log("[onPressedMoveEnd] points:", p1, p2)
       setPoints([p1, p2])
     }
   }, [])
 
-  const handlePressedMoving = useCallback((event: OverlayEvent) => {
+  const handlePressedMoving = useCallback((event: OverlayEvent<unknown>) => {
     const pts = event?.overlay?.points
     if (pts && pts.length >= 2) {
       console.log("[onPressedMoving] p1:", pts[0], "p2:", pts[1])
     }
   }, [])
 
-  const handleSelected = useCallback((event: OverlayEvent) => {
+  const handleSelected = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onSelected] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleDeselected = useCallback((event: OverlayEvent) => {
+  const handleDeselected = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onDeselected] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleClick = useCallback((event: OverlayEvent) => {
+  const handleClick = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onClick] overlay:", event?.overlay?.id)
   }, [])
 
-  const handleRightClick = useCallback((event: OverlayEvent) => {
+  const handleRightClick = useCallback((event: OverlayEvent<unknown>) => {
     console.log("[onRightClick] overlay:", event?.overlay?.id)
   }, [])
 
@@ -169,6 +173,7 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, symbol}: Trendli
 
     const id = createTrendlineAlertLine(chart, points, {
       color, lineWidth, lineStyle, lock,
+      text, textColor, textBackgroundColor, textFontSize,
       onPressedMoveEnd: handlePressedMoveEnd,
       onPressedMoving: handlePressedMoving,
       onSelected: handleSelected,
@@ -179,7 +184,7 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, symbol}: Trendli
 
     if (id) idsRef.current.push(id)
     return clear
-  }, [chart, points, lock, color, lineWidth, lineStyle])
+  }, [chart, points, lock, color, lineWidth, lineStyle, text, textColor, textBackgroundColor, textFontSize])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
@@ -286,6 +291,10 @@ export const TrendlineAlert: StoryObj<typeof TrendlineAlertDemo> = {
     color: {control: "color", table: {category: "Line"}},
     lineWidth: {control: {type: "number", min: 1, max: 5}, table: {category: "Line"}},
     lineStyle: {control: "select", options: ["solid", "dashed"], table: {category: "Line"}},
+    text: {control: "text", table: {category: "Label"}},
+    textColor: {control: "color", table: {category: "Label"}},
+    textBackgroundColor: {control: "color", table: {category: "Label"}},
+    textFontSize: {control: {type: "number", min: 8, max: 24}, table: {category: "Label"}},
     symbol: {control: "text", table: {category: "Chart"}},
   },
   args: {
@@ -293,6 +302,10 @@ export const TrendlineAlert: StoryObj<typeof TrendlineAlertDemo> = {
     color: "#3ea6ff",
     lineWidth: 1,
     lineStyle: "solid",
+    text: "Alert 🔔",
+    textColor: "#FFFFFF",
+    textBackgroundColor: "#3ea6ff",
+    textFontSize: 12,
     symbol: "BINA_USDT_BTC",
   },
 }
