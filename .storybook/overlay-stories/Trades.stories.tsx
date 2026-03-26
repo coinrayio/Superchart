@@ -63,7 +63,13 @@ function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, 
 
         const side = SIDES[i % SIDES.length]
         const amount = HARDCODED_AMOUNTS[i % HARDCODED_AMOUNTS.length]
-        const price = side === "buy" ? match.low : match.high
+        // Vary price within the candle range so multiple trades on the same candle
+        // render at different heights (demonstrates price-based positioning)
+        const range = match.high - match.low
+        const offset = range * ((i % 3) * 0.3)
+        const price = side === "buy"
+          ? match.low + offset
+          : match.high - offset
         const label = formatLabel(side, amount, price, showAmount, showPrice)
         const color = side === "buy" ? buyColor : sellColor
 
@@ -169,5 +175,14 @@ export const TinyArrows: Story = {
   args: {
     ...WideArrows.args,
     arrowType: "tiny",
+  },
+}
+
+export const MultiplePricesOnSameCandle: Story = {
+  name: "Multiple prices per candle",
+  args: {
+    ...WideArrows.args,
+    numTrades: 3,
+    spacingHours: 0,
   },
 }
