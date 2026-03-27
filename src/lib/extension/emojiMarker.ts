@@ -14,11 +14,13 @@ const { merge, clone } = utils
 interface EmojiMarkerProperties {
   text?: string
   fontSize?: number
+  color?: string
 }
 
 const defaultStyle: Required<EmojiMarkerProperties> = {
   text: '⭐',
-  fontSize: 24
+  fontSize: 24,
+  color: '#000000'
 }
 
 const emojiMarker = (): ProOverlayTemplate => {
@@ -51,6 +53,7 @@ const emojiMarker = (): ProOverlayTemplate => {
 
       const text = prop('text') ?? defaultStyle.text
       const fontSize = prop('fontSize') ?? defaultStyle.fontSize
+      const color = prop('color') ?? defaultStyle.color
 
       return [
         {
@@ -64,7 +67,7 @@ const emojiMarker = (): ProOverlayTemplate => {
             baseline: 'middle'
           },
           styles: {
-            color: '#000000',
+            color,
             backgroundColor: 'transparent',
             borderSize: 0,
             size: fontSize,

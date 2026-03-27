@@ -1,11 +1,4 @@
-import type {Chart, Nullable, Overlay, OverlayEvent} from "@superchart"
-
-// Workaround: Pro overlays don't respect styles passed via createOverlay.
-// Use setProperties after creation to apply line/text styles.
-function applyProperties(chart: Chart, id: string, props: Record<string, unknown>): void {
-  const overlay = chart.getOverlays({id})[0] as Overlay & {setProperties?: (p: Record<string, unknown>, id: string) => void}
-  if (overlay?.setProperties) overlay.setProperties(props, id)
-}
+import type {Chart, Nullable, OverlayEvent} from "@superchart"
 
 // ---------------------------------------------------------------------------
 // Time Alert — vertical line with text label
@@ -135,12 +128,9 @@ export function createTriggeredPriceAlert(
     points: [{timestamp, value: price}],
     lock: true,
     visible: true,
-    extendData: {text: "🔔", fontSize},
+    extendData: {text: "🔔", fontSize, color},
     paneId: "candle_pane",
   }) as Nullable<string>
-
-  // Apply color to the emoji marker via properties
-  if (id) applyProperties(chart, id, {color})
   return id
 }
 
