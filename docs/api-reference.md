@@ -447,6 +447,32 @@ Wraps a TradingView-compatible `Datafeed` into a klinecharts `DataLoader`. Handl
 
 See [data-loading.md](./data-loading.md) for full details.
 
+### registerOverlay
+
+```typescript
+function registerOverlay(template: OverlayTemplate): void
+```
+
+Register a custom overlay type. The template defines the overlay name, how many click steps it requires, and how to render its figures. Call before `new Superchart()` or before first use.
+
+See [overlays.md — Custom Overlays](./overlays.md#custom-overlays) for full examples.
+
+### registerFigure
+
+```typescript
+function registerFigure(template: FigureTemplate): void
+```
+
+Register a custom figure primitive (canvas shape). Custom overlays can reference registered figures by name in their `createPointFigures` return values.
+
+### registerIndicator
+
+```typescript
+function registerIndicator(template: IndicatorTemplate): void
+```
+
+Register a custom indicator template. The template defines the indicator name, calculation function, and figure rendering.
+
 ### createOrderLine
 
 ```typescript
@@ -508,7 +534,11 @@ Inverse of `resolutionToPeriod`. Converts a `Period` to a TradingView resolution
 | `Chart` | klinecharts | Raw klinecharts chart instance |
 | `Styles` | klinecharts | Full chart style tree |
 | `OverlayCreate` | klinecharts | Overlay creation options |
+| `OverlayTemplate` | klinecharts | Template for defining custom overlay types |
 | `OverlayMode` | klinecharts | `'normal' \| 'lock' \| ...` |
+| `FigureTemplate` | klinecharts | Template for defining custom figure primitives |
+| `IndicatorTemplate` | klinecharts | Template for defining custom indicator types |
+| `ProOverlayTemplate` | klinecharts | Extended overlay template with property management |
 | `DataLoader` | klinecharts | klinecharts data-loading interface |
 | `PaneOptions` | klinecharts | Pane creation options |
 | `PaneLayout` | superchart | `{ id, height, minHeight?, state, order }` |

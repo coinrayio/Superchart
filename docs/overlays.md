@@ -615,3 +615,212 @@ chart.createOverlay({
   },
 })
 ```
+
+---
+
+## Custom Overlays
+
+Superchart exposes registration APIs that let consumers define and register custom overlay types, figure primitives, and indicator templates.
+
+### Registration Functions
+
+```typescript
+import {
+  registerOverlay,
+  registerFigure,
+  registerIndicator,
+} from 'superchart'
+
+// Types for defining templates
+import type {
+  OverlayTemplate,
+  FigureTemplate,
+  IndicatorTemplate,
+  ProOverlayTemplate,
+} from 'superchart'
+```
+
+| Function | Description |
+|---|---|
+| `registerOverlay(template)` | Register a custom overlay type (drawing tool) |
+| `registerFigure(template)` | Register a custom figure primitive (canvas shape) |
+| `registerIndicator(template)` | Register a custom indicator template |
+
+**Important:** Call registration functions **before** creating the chart (`new Superchart()`), or before the first `createOverlay()` call that uses the custom name.
+
+### Example: Simple Emoji Marker Overlay
+
+A minimal overlay that renders a single emoji at the clicked position:
+
+```typescript
+import { registerOverlay } from 'superchart'
+import type { OverlayTemplate } from 'superchart'
+
+const myEmojiOverlay: OverlayTemplate = {
+  name: 'myEmoji',
+  totalStep: 2,  // click once to place
+  needDefaultPointFigure: false,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length === 0) return []
+    const emoji = (overlay.extendData as { text?: string })?.text ?? '📌'
+
+    return [{
+      type: 'text',
+      attrs: {
+        x: coordinates[0].x,
+        y: coordinates[0].y,
+        text: emoji,
+        align: 'center',
+        baseline: 'middle',
+      },
+      styles: {
+        color: '#000000',
+        size: 24,
+        backgroundColor: 'transparent',
+        borderSize: 0,
+        paddingLeft: 0, paddingRight: 0,
+        paddingTop: 0, paddingBottom: 0,
+      },
+    }]
+  },
+}
+
+registerOverlay(myEmojiOverlay)
+
+// Usage:
+const chart = superchart.getChart()
+chart?.createOverlay({
+  name: 'myEmoji',
+  points: [{ timestamp: Date.now(), value: 50000 }],
+  extendData: { text: '🚀' },
+})
+```
+
+### Example: Split-Line Overlay with Text Gap
+
+An overlay that renders a horizontal line split into two segments with label text in the gap (like orderLine or breakEvenLine):
+
+```typescript
+import { registerOverlay, utils } from 'superchart'
+
+const { calcTextWidth } = utils
+
+registerOverlay({
+  name: 'labeledPriceLine',
+  totalStep: 2,
+
+  createPointFigures: ({ coordinates, bounding, overlay }) => {
+    if (coordinates.length === 0) return []
+    const y = coordinates[0].y
+    const data = overlay.extendData as { text?: string; color?: string } | null
+    const text = data?.text ?? ''
+    const color = data?.color ?? '#FF5252'
+
+    if (text.length === 0) {
+      return [{ type: 'line', attrs: { coordinates: [{ x: 0, y }, { x: bounding.width, y }] }, styles: { color } }]
+    }
+
+    const textW = calcTextWidth(text, 12, 'normal')
+    const gap = textW + 12
+    const midX = bounding.width / 2
+
+    return [
+      // Left line
+      { type: 'line', attrs: { coordinates: [{ x: 0, y }, { x: midX - gap / 2, y }] }, styles: { color }, ignoreEvent: true },
+      // Right line
+      { type: 'line', attrs: { coordinates: [{ x: midX + gap / 2, y }, { x: bounding.width, y }] }, styles: { color }, ignoreEvent: true },
+      // Label
+      { type: 'text', attrs: { x: midX, y, text, align: 'center', baseline: 'middle' },
+        styles: { color, size: 12, backgroundColor: 'transparent', borderSize: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } },
+    ]
+  },
+})
+```
+
+### Example: Custom Figure Primitive
+
+Register a custom canvas figure that overlays can reference by name:
+
+```typescript
+import { registerFigure } from 'superchart'
+
+registerFigure({
+  name: 'diamond',
+  checkEventOn: (coordinate, attrs, styles) => {
+    const { x, y, size = 10 } = attrs
+    return Math.abs(coordinate.x - x) + Math.abs(coordinate.y - y) <= size
+  },
+  draw: (ctx, attrs, styles) => {
+    const { x, y, size = 10 } = attrs
+    const { color = '#FF5252' } = styles
+    ctx.beginPath()
+    ctx.moveTo(x, y - size)
+    ctx.lineTo(x + size, y)
+    ctx.lineTo(x, y + size)
+    ctx.lineTo(x - size, y)
+    ctx.closePath()
+    ctx.fillStyle = color
+    ctx.fill()
+  },
+})
+
+// Use in a custom overlay:
+registerOverlay({
+  name: 'diamondMarker',
+  totalStep: 2,
+  createPointFigures: ({ coordinates }) => [{
+    type: 'diamond',  // references the registered figure
+    attrs: { x: coordinates[0].x, y: coordinates[0].y, size: 8 },
+    styles: { color: '#FFD700' },
+  }],
+})
+```
+
+### ProOverlayTemplate (Advanced)
+
+For overlays that need per-instance property management (like orderLine), use the `ProOverlayTemplate` factory pattern:
+
+```typescript
+import { registerOverlay } from 'superchart'
+import type { ProOverlayTemplate } from 'superchart'
+
+function myOverlayFactory(): ProOverlayTemplate {
+  // Per-instance state via closure
+  let properties: Record<string, unknown> = {}
+
+  return {
+    name: 'myProOverlay',
+    totalStep: 2,
+
+    createPointFigures: ({ coordinates, overlay }) => {
+      const ext = overlay.extendData as Record<string, unknown> | null
+      const color = (ext?.color ?? properties.color ?? '#FF0000') as string
+      // ... render figures using merged properties
+      return []
+    },
+
+    setProperties: (newProps, id) => {
+      properties = { ...properties, ...newProps }
+    },
+
+    getProperties: (id) => ({ ...properties }),
+  }
+}
+
+registerOverlay(myOverlayFactory())
+```
+
+### Built-in Overlay Types
+
+These custom overlays are registered by Superchart and available for use:
+
+| Name | Description |
+|---|---|
+| `orderLine` | Horizontal price line with body/quantity/cancel sections |
+| `emojiMarker` | Single emoji character at a point |
+| `timeAlertLine` | Vertical line split with rotated text label |
+| `breakEvenLine` | Horizontal line split with text label in gap |
+| `trendlineAlertLine` | Two-point segment with angle-matched rotated text |
