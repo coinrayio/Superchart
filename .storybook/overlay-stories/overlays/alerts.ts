@@ -1,13 +1,8 @@
-import type {Chart, Nullable, Overlay, OverlayEvent, TradeLine, TradeLineProperties} from "@superchart"
-import {createTradeLine} from "@superchart"
+import type {Chart, Nullable, OverlayEvent} from "@superchart"
 
-// Workaround: segment and verticalStraightLine don't respect styles.line.* passed via
-// createOverlay. Use setProperties after creation to apply line colors/styles.
-// Remove this when SC natively supports styles on Pro overlays.
-function applyProperties(chart: Chart, id: string, props: Record<string, unknown>): void {
-  const overlay = chart.getOverlays({id})[0] as Overlay & {setProperties?: (p: Record<string, unknown>, id: string) => void}
-  if (overlay?.setProperties) overlay.setProperties(props, id)
-}
+// ---------------------------------------------------------------------------
+// Time Alert — vertical line with text label
+// ---------------------------------------------------------------------------
 
 export interface TimeAlertLineOptions {
   color?: string
@@ -45,16 +40,22 @@ export function createTimeAlertLine(
   } = options
 
   const id = chart.createOverlay({
-    name: "verticalStraightLine",
+    name: "timeAlertLine",
     points: [{timestamp, value: 0}],
     lock,
+    extendData: {
+      lineColor: color, lineWidth, lineStyle,
+      text, textColor, textFontSize,
+    },
     ...callbacks,
   }) as Nullable<string>
-  if (id) applyProperties(chart, id, {lineColor: color, lineWidth, lineStyle})
   return id
 }
 
-// Trendline alert (segment with two draggable points, callbacks)
+// ---------------------------------------------------------------------------
+// Trendline Alert — segment with text label (bell + label at midpoint)
+// ---------------------------------------------------------------------------
+
 type Point = {timestamp: number, value: number}
 
 export interface TrendlineAlertLineOptions {
@@ -93,18 +94,25 @@ export function createTrendlineAlertLine(
   } = options
 
   const id = chart.createOverlay({
-    name: "segment",
+    name: "trendlineAlertLine",
     points,
     lock,
+    extendData: {
+      lineColor: color, lineWidth, lineStyle,
+      text, textColor, textFontSize,
+    },
     ...callbacks,
   }) as Nullable<string>
-  if (id) applyProperties(chart, id, {lineColor: color, lineWidth, lineStyle})
   return id
 }
 
-// Triggered price alert (tradeLine arrow marker — matches chart-controller.createTriggeredAlert)
+// ---------------------------------------------------------------------------
+// Triggered Price Alert — bell emoji at timestamp/price
+// ---------------------------------------------------------------------------
+
 export interface TriggeredPriceAlertOptions {
   color?: string
+  fontSize?: number
 }
 
 export function createTriggeredPriceAlert(
@@ -112,24 +120,22 @@ export function createTriggeredPriceAlert(
   timestamp: number,
   price: number,
   options: TriggeredPriceAlertOptions = {},
-): Nullable<TradeLine> {
-  const {color = "#00BFFF"} = options
+): Nullable<string> {
+  const {color = "#00BFFF", fontSize = 20} = options
 
-  const props: Partial<TradeLineProperties> = {
-    direction: "up",
-    arrowType: "wide",
-    color,
-    text: "",
-    gap: 4,
-    timestamp,
-    price,
-  }
-
-  return createTradeLine(chart, props)
+  const id = chart.createOverlay({
+    name: "emojiMarker",
+    points: [{timestamp, value: price}],
+    lock: true,
+    visible: true,
+    extendData: {text: "🔔", fontSize, color},
+    paneId: "candle_pane",
+  }) as Nullable<string>
+  return id
 }
 
 export function removeAllTriggeredAlerts(chart: Chart): void {
-  chart.removeOverlay({name: "tradeLine"})
+  chart.removeOverlay({name: "emojiMarker"})
 }
 
 export function removeOverlay(chart: Chart, id: string): void {

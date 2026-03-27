@@ -29,8 +29,8 @@ export { createPriceLine, createTradeLine } from 'klinecharts'
 export { createDataLoader } from './datafeed'
 export type { SuperchartDataLoader } from './datafeed'
 
-// Order line default styles (from coinray-chart)
-export { DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
+// Overlay/figure/indicator registration — allows consumers to define custom overlays
+export { registerOverlay, registerFigure, registerIndicator, DEFAULT_OVERLAY_PROPERTIES } from 'klinecharts'
 
 // Core klinecharts types — re-exported so consumers import from superchart, not klinecharts
 export type {
@@ -43,8 +43,11 @@ export type {
   Overlay,
   OverlayCreate,
   OverlayEvent,
+  OverlayTemplate,
   Indicator,
   IndicatorCreate,
+  IndicatorTemplate,
+  FigureTemplate,
 } from 'klinecharts'
 
 // Superchart-specific types

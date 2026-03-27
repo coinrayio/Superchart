@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from "react"
 import type {Meta, StoryObj} from "@storybook/react"
-import type {Chart, OverlayEvent, TradeLine} from "@superchart"
+import type {Chart, OverlayEvent} from "@superchart"
 import {SuperchartCanvas} from "../helpers/SuperchartCanvas"
 import {createTimeAlertLine, createTrendlineAlertLine, createTriggeredPriceAlert, removeAllTriggeredAlerts, removeOverlay} from "./overlays/alerts"
 import {useCurrentPrice} from "../helpers/useCurrentPrice"
@@ -200,7 +200,7 @@ interface TriggeredPriceAlertArgs {
 
 function TriggeredPriceAlertDemo({numAlerts, spacingHours, color, symbol}: TriggeredPriceAlertArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
-  const linesRef = useRef<TradeLine[]>([])
+  const idsRef = useRef<string[]>([])
 
   const onChart = useCallback((c: Chart) => setChart(c), [])
 
@@ -221,13 +221,13 @@ function TriggeredPriceAlertDemo({numAlerts, spacingHours, color, symbol}: Trigg
         }
 
         const price = i % 2 === 0 ? match.high : match.low
-        const line = createTriggeredPriceAlert(chart, match.timestamp, price, {color})
-        if (line) linesRef.current.push(line)
+        const id = createTriggeredPriceAlert(chart, match.timestamp, price, {color})
+        if (id) idsRef.current.push(id)
       }
     }
 
     removeAllTriggeredAlerts(chart)
-    linesRef.current = []
+    idsRef.current = []
 
     const dataList = chart.getDataList()
     if (dataList.length) {
@@ -239,16 +239,9 @@ function TriggeredPriceAlertDemo({numAlerts, spacingHours, color, symbol}: Trigg
 
     return () => {
       removeAllTriggeredAlerts(chart)
-      linesRef.current = []
+      idsRef.current = []
     }
-  }, [chart, numAlerts, spacingHours])
-
-  // Style updates via fluent setters
-  useEffect(() => {
-    for (const line of linesRef.current) {
-      line.setColor(color)
-    }
-  }, [color])
+  }, [chart, numAlerts, spacingHours, color])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }

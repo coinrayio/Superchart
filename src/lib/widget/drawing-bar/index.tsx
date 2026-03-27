@@ -182,6 +182,7 @@ export function DrawingBar({
         visible,
         lock,
         mode: mode as OverlayMode,
+        ...(item.extendData != null ? { extendData: item.extendData } : {}),
       })
     },
     [closePopover, lock, mode, onCursorReset, onDrawingItemClick, visible]

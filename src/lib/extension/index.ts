@@ -10,10 +10,11 @@
 import { registerOverlay } from 'klinecharts'
 
 import orderLine from './orderLine'
+import emojiMarker from './emojiMarker'
 
-// Register order line overlay (factory → template → registerOverlay)
-const orderLineTemplate = orderLine()
-registerOverlay(orderLineTemplate)
+// Register overlays (factory → template → registerOverlay)
+registerOverlay(orderLine())
+registerOverlay(emojiMarker())
 
 // Re-export order line API and types
 export { createOrderLine } from './orderLineApi'
