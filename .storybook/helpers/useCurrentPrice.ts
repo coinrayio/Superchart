@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react"
-import type {Chart} from "klinecharts"
+import type {Chart} from "@superchart/index"
 
 /** Returns the last close price from the chart's data list. Updates on data changes. */
 export function useCurrentPrice(chart: Chart | null): number | null {

@@ -303,6 +303,8 @@ export interface DrawingToolItem {
   isCursorMode?: boolean
   /** true → toggles eraser/delete mode (no overlay created) */
   isEraserMode?: boolean
+  /** Data passed to the overlay's extendData (e.g. emoji text for simpleAnnotation) */
+  extendData?: unknown
 }
 
 // ---------------------------------------------------------------------------
@@ -412,17 +414,17 @@ export function createAnnotationOptions(_locale: string): DrawingToolItem[] {
   ]
 }
 
-/** Group 7 — Emoji / icon markers (PNG icons to be wired later) */
+/** Group 7 — Emoji / icon markers drawn via emojiMarker overlay */
 export function createEmojiOptions(_locale: string): DrawingToolItem[] {
   return [
-    { key: 'horizontalStraightLine', text: '👍 Thumbs Up' },
-    { key: 'horizontalStraightLine', text: '👎 Thumbs Down' },
-    { key: 'horizontalStraightLine', text: '⭐ Star' },
-    { key: 'horizontalStraightLine', text: '❤️  Heart' },
-    { key: 'horizontalStraightLine', text: '💡 Idea' },
-    { key: 'horizontalStraightLine', text: '⚠️  Warning' },
-    { key: 'horizontalStraightLine', text: '🚀 Rocket' },
-    { key: 'horizontalStraightLine', text: '🔥 Fire' },
+    { key: 'emojiMarker', text: '👍 Thumbs Up',   extendData: { text: '👍' } },
+    { key: 'emojiMarker', text: '👎 Thumbs Down',  extendData: { text: '👎' } },
+    { key: 'emojiMarker', text: '⭐ Star',         extendData: { text: '⭐' } },
+    { key: 'emojiMarker', text: '❤️ Heart',        extendData: { text: '❤️' } },
+    { key: 'emojiMarker', text: '💡 Idea',         extendData: { text: '💡' } },
+    { key: 'emojiMarker', text: '⚠️ Warning',      extendData: { text: '⚠️' } },
+    { key: 'emojiMarker', text: '🚀 Rocket',       extendData: { text: '🚀' } },
+    { key: 'emojiMarker', text: '🔥 Fire',         extendData: { text: '🔥' } },
   ]
 }
 

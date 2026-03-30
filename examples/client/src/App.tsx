@@ -63,6 +63,16 @@ function App() {
 
     chartRef.current = chart
 
+    chart.onSymbolChange((symbol) => {
+      console.log('[Superchart] Symbol changed:', symbol.ticker, symbol)
+    })
+    chart.onPeriodChange((period) => {
+      console.log('[Superchart] Period changed:', period.text, period)
+    })
+    chart.onVisibleRangeChange((range) => {
+      console.log('[Superchart] Visible range changed:', { from: new Date(range.from * 1000).toISOString(), to: new Date(range.to * 1000).toISOString() })
+    })
+
     // Sample toolbar button — alerts the current symbol
     chart.createButton({
       text: 'Alert',

@@ -1,3 +1,5 @@
+@import (reference) '../../base.less';
+
 .@{prefix-cls}-color {
   position: relative;
   display: flex;
@@ -30,154 +32,6 @@
       transition: all .2s;
     }
   }
-  .drop-down-container {
-    background-color: var(--superchart-popover-background-color);
-    box-shadow: 0 6px 12px 0 rgba(0, 0, 0, .3);
-    position: fixed;
-    // right: 0;
-		min-width: 200px;
-    max-width: fit-content;
-		padding: 12px;
-    top: calc(100% + 1px);
-    transition: all .2s;
-    transform: scaleY(0);
-    transform-origin: top;
-    opacity: 0;
-    z-index: 100;
-    border-radius: 3px;
-    // max-height: 200px;
-    overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		align-items: start;
-		gap: 12px;
-    box-shadow:  0px 2px 4px 0px var(--superchart-popup-shadow-color);
-    // ul {
-    //   list-style: none;
-    //   margin: 0;
-    //   padding: 0;
-    //   overflow: hidden;
-    //   li {
-    //     display: flex;
-    //     flex-direction: row;
-    //     align-items: center;
-    //     height: 40px;
-    //     padding: 0 10px;
-    //     &:first-child {
-    //       border-top-left-radius: 2px;
-    //       border-top-right-radius: 2px;
-    //     }
-    //     &:last-child {
-    //       border-bottom-left-radius: 2px;
-    //       border-bottom-right-radius: 2px;
-    //     }
-    //     &:hover {
-    //       background-color: var(--superchart-hover-background-color);
-    //     }
-    //   }
-    // }
-
-		div.each_line{
-			display: flex;
-			gap: 4px;
-			align-items: start;
-			flex-wrap: wrap;
-
-
-			div.each_color{
-				width: 19px;
-				height: 19px;
-				border-radius: 5px;
-				
-				&:first-child {
-					border: 1px solid rgb(209, 212, 220);
-				}
-
-        &.selected{
-          outline: 2px solid blue;
-        }
-			}
-		}
-    div.split_line{
-      border-bottom: 1px solid var(--superchart-border-color);
-      width: 100%;
-      // display: block;
-      // width: 100%;
-      // height: 1px;
-      // background-color: var(--superchart-border-color);;
-    }
-    div.range_div{
-      display: flex;
-      align-items: center;
-      gap: 16px;
-
-      input.range{
-        -webkit-appearance: none;
-        appearance: none;
-        height: 10px;
-        border-radius: 3px;
-        outline: none;
-      }
-      input.range::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 15px;
-        height: 15px;
-        background-color: white;
-        border-radius: 50%;
-        border: 1px solid var(--superchart-border-color);
-      }
-      input.range::-moz-range-thumb {
-        width: 15px;
-        height: 15px;
-        background-color: white;
-        border-radius: 50%;
-        border: 1px solid var(--superchart-border-color);
-      }
-      
-      /* For IE and Edge */
-      input.range::-ms-thumb {
-        width: 15px;
-        height: 15px;
-        background-color: white;
-        border-radius: 50%;
-        border: 1px solid var(--superchart-border-color);
-      }
-
-      p{
-        font-size: 14px;
-        border: 1px solid var(--superchart-border-color);
-        padding: 2px 4px 2px 10px;
-        border-radius: 2px;
-      }
-    }
-
-    div.submit{
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      justify-content: flex-end;
-
-      span{
-        padding: 5px 10px;
-        font-size: 14px;
-        border-radius: 4px;
-        color: #ffffff;
-        background-color: var(--superchart-primary-color);
-        cursor: pointer;
-
-        &.cancel{
-          background-color: transparent;
-          color: var(--superchart-primary-color);
-          border: solid 1px var(--superchart-primary-color);
-        }
-      }
-    }
-
-    
-		
-  }
 }
 
 .@{prefix-cls}-color-show {
@@ -190,8 +44,120 @@
       transform: rotate(180deg);
     }
   }
-  .drop-down-container {
-    transform: scaleY(1)!important;
-    opacity: 1!important;
+}
+
+// Color picker dropdown — rendered via portal to document.body
+.drop-down-container {
+  background-color: var(--superchart-popover-background-color);
+  color: var(--superchart-text-color);
+  font-size: 14px;
+  position: fixed;
+  width: 280px;
+  padding: 12px;
+  z-index: 100;
+  border-radius: 3px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 12px;
+  box-shadow: 0px 2px 4px 0px var(--superchart-popup-shadow-color);
+
+  div.each_line {
+    display: flex;
+    gap: 4px;
+    align-items: start;
+    flex-wrap: wrap;
+
+    div.each_color {
+      width: 19px;
+      height: 19px;
+      border-radius: 5px;
+
+      &:first-child {
+        border: 1px solid rgb(209, 212, 220);
+      }
+
+      &.selected {
+        outline: 2px solid blue;
+      }
+    }
+  }
+
+  div.split_line {
+    border-bottom: 1px solid var(--superchart-border-color);
+    width: 100%;
+  }
+
+  div.range_div {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    input.range {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 10px;
+      border-radius: 3px;
+      outline: none;
+    }
+    input.range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      background-color: white;
+      border-radius: 50%;
+      border: 1px solid var(--superchart-border-color);
+    }
+    input.range::-moz-range-thumb {
+      width: 15px;
+      height: 15px;
+      background-color: white;
+      border-radius: 50%;
+      border: 1px solid var(--superchart-border-color);
+    }
+
+    /* For IE and Edge */
+    input.range::-ms-thumb {
+      width: 15px;
+      height: 15px;
+      background-color: white;
+      border-radius: 50%;
+      border: 1px solid var(--superchart-border-color);
+    }
+
+    p {
+      font-size: 14px;
+      border: 1px solid var(--superchart-border-color);
+      padding: 2px 4px 2px 10px;
+      border-radius: 2px;
+      width: 48px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+  }
+
+  div.submit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    justify-content: flex-end;
+
+    span {
+      padding: 5px 10px;
+      font-size: 14px;
+      border-radius: 4px;
+      color: #ffffff;
+      background-color: var(--superchart-primary-color);
+      cursor: pointer;
+
+      &.cancel {
+        background-color: transparent;
+        color: var(--superchart-primary-color);
+        border: solid 1px var(--superchart-primary-color);
+      }
+    }
   }
 }

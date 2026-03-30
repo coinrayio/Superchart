@@ -24,6 +24,7 @@ import * as store from '../../store/chartStore'
 import {
   getOverlayPropertySchema,
   klineStylesToOverlayProperties,
+  schemaHasField,
   WIDTH_PX_OPTIONS,
   FONT_SIZE_OPTIONS,
   type PropertyFieldSchema,
@@ -46,7 +47,21 @@ import {
 
 import './index.less'
 
-type SettingsTab = 'style' | 'coordinates' | 'visibility'
+type SettingsTab = 'style' | 'text' | 'coordinates' | 'visibility'
+
+// Fields for the Text tab that are defined in the coinray-chart source but not yet
+// reflected in the built dist/index.d.ts — cast keys to satisfy the type constraint.
+type LoosePropertyFieldSchema = Omit<PropertyFieldSchema, 'key'> & { key: string }
+
+const TEXT_TAB_FIELDS: LoosePropertyFieldSchema[] = [
+  { key: 'text',                label: 'Text content',       editor: 'text' },
+  { key: 'textColor',          label: 'Text color',         editor: 'color' },
+  { key: 'textFontSize',       label: 'Font size',          editor: 'fontSize' },
+  { key: 'textFontWeight',     label: 'Bold',               editor: 'select', options: ['normal', 'bold'] },
+  { key: 'textFontStyle',      label: 'Italic',             editor: 'select', options: ['normal', 'italic'] },
+  { key: 'textAlignVertical',  label: 'Vertical align',     editor: 'select', options: ['top', 'middle', 'bottom'] },
+  { key: 'textAlignHorizontal', label: 'Horizontal align',  editor: 'select', options: ['left', 'center', 'right'] },
+]
 
 /** Overlays that support extend left/right (have rendering support in coinray-chart) */
 const EXTEND_CAPABLE_OVERLAYS = new Set([
@@ -146,6 +161,7 @@ function OverlaySettingModal() {
 
   const overlayName = overlay.name
   const schema = getOverlayPropertySchema(overlayName)
+  const hasEditableText = schemaHasField(overlayName, 'text')
 
   const handleFieldChange = (field: PropertyFieldSchema, value: unknown) => {
     setLocalProps(prev => ({ ...prev, [field.key]: value }))
@@ -310,7 +326,7 @@ function OverlaySettingModal() {
       <div className="superchart-overlay-setting-modal-content">
         {/* Tab bar */}
         <div className="tab-bar">
-          {(['style', 'coordinates', 'visibility'] as SettingsTab[]).map(tab => (
+          {(['style', ...(hasEditableText ? ['text'] : []), 'coordinates', 'visibility'] as SettingsTab[]).map(tab => (
             <button
               key={tab}
               className={`tab-item ${activeTab === tab ? 'active' : ''}`}
@@ -389,6 +405,31 @@ function OverlaySettingModal() {
                 </label>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Text tab */}
+        {activeTab === 'text' && hasEditableText && (
+          <div className="content">
+            <div className="section">
+              <div className="section-title">Text</div>
+              {TEXT_TAB_FIELDS.map(field => {
+                const value = localProps[field.key]
+                return (
+                  <div key={field.key} className="component">
+                    <span>{field.label}</span>
+                    <FieldEditor
+                      field={field as PropertyFieldSchema}
+                      value={value}
+                      onChange={(v) => {
+                        setLocalProps(prev => ({ ...prev, [field.key]: v }))
+                        modifyOverlayProperties(overlay.id, { [field.key]: v } as DeepPartial<OverlayProperties>)
+                      }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 

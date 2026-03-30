@@ -17,7 +17,6 @@ import type {
   Styles,
   OverlayCreate,
   OverlayMode,
-  VisibleRange,
 } from 'klinecharts'
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
@@ -322,19 +321,15 @@ export default class Superchart implements SuperchartApi {
           // Subscribe to visible range changes from the underlying chart
           const chart = api.getChart()
           if (chart) {
-            const handler = (data?: unknown): void => {
+            const handler = (): void => {
               if (this._listeners.visibleRangeChange.size === 0) return
-              const range = data as VisibleRange
-              const dataList = chart.getDataList()
-              const fromTs = dataList[range.realFrom]?.timestamp ?? 0
-              const toTs = dataList[range.realTo]?.timestamp ?? 0
-              if (fromTs > 0 && toTs > 0) {
-                const timeRange: VisibleTimeRange = {
-                  from: Math.floor(fromTs / 1000),
-                  to: Math.floor(toTs / 1000),
-                }
-                this._listeners.visibleRangeChange.forEach(cb => cb(timeRange))
+              const ts = chart.getVisibleRangeTimestamps()
+              if (ts === null) return
+              const timeRange: VisibleTimeRange = {
+                from: Math.floor(ts.from / 1000),
+                to: Math.floor(ts.to / 1000),
               }
+              this._listeners.visibleRangeChange.forEach(cb => cb(timeRange))
             }
             chart.subscribeAction('onVisibleRangeChange', handler)
             this._unsubscribers.push(() => chart.unsubscribeAction('onVisibleRangeChange', handler))
@@ -423,6 +418,20 @@ export default class Superchart implements SuperchartApi {
 
   getChart(): Nullable<Chart> {
     return this._api?.getChart() ?? store.instanceApi()
+  }
+
+  /**
+   * Set the visible range by scrolling and zooming so that the given
+   * time range (unix seconds) fills the chart viewport.
+   */
+  setVisibleRange(range: VisibleTimeRange): void {
+    const chart = this.getChart()
+    if (!chart) return
+    // Convert seconds to milliseconds for klinecharts timestamps
+    chart.setVisibleRange({
+      from: range.from * 1000,
+      to: range.to * 1000,
+    })
   }
 
   resize(): void {

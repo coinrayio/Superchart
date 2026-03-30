@@ -1,4 +1,4 @@
-import type {Chart, OrderLineEventListener} from "klinecharts"
+import type {Chart, OrderLineEventListener} from "@superchart/index"
 import {createOrderLine, type OrderLine, type OrderLineProperties} from "@superchart/index"
 
 export type {OrderLine, OrderLineProperties}
@@ -12,9 +12,45 @@ export interface MockOrder {
 
 export interface CreateOrderSettings {
   showLine: boolean
-  showLabels: boolean
+  showBody: boolean
+  showQuantity: boolean
   text?: string
-  color: string
+  align?: "left" | "right"
+  editable?: boolean
+  extendLeft?: boolean
+  extendRight?: boolean
+  marginLeft?: number
+
+  // Line
+  lineColor?: string
+  lineWidth?: number
+  lineStyle?: "solid" | "dashed"
+
+  // Body
+  bodyTextColor?: string
+  bodyBackgroundColor?: string
+  bodyBorderColor?: string
+
+  // Quantity
+  quantityTextColor?: string
+  quantityBackgroundColor?: string
+  quantityBorderColor?: string
+
+  // Cancel button
+  cancelButtonIconColor?: string
+  cancelButtonBackgroundColor?: string
+  cancelButtonBorderColor?: string
+
+  // Y-axis label
+  yAxisLabelTextColor?: string
+  yAxisLabelBackgroundColor?: string
+  yAxisLabelBorderColor?: string
+  yAxisLabelBorderSize?: number
+
+  // Shared border
+  borderRadius?: number
+  borderSize?: number
+
   onModify?: OrderLineEventListener,
   onCancel?: OrderLineEventListener,
   onMove?: OrderLineEventListener,
@@ -23,30 +59,47 @@ export interface CreateOrderSettings {
 
 export function createOrder(chart: Chart, order: MockOrder, settings: CreateOrderSettings): OrderLine {
   const {
-    showLine, showLabels,
-    text, color,
+    showLine, showBody, showQuantity,
+    text, align, editable, extendLeft, extendRight, marginLeft,
+    lineColor, lineWidth, lineStyle,
+    bodyTextColor, bodyBackgroundColor, bodyBorderColor,
+    quantityTextColor, quantityBackgroundColor, quantityBorderColor,
+    cancelButtonIconColor, cancelButtonBackgroundColor, cancelButtonBorderColor,
+    yAxisLabelTextColor, yAxisLabelBackgroundColor, yAxisLabelBorderColor, yAxisLabelBorderSize,
+    borderRadius, borderSize,
     onModify, onCancel, onMove, onMoveEnd
   } = settings
 
   return createOrderLine(chart, {
-    price:order.price,
+    price: order.price,
     text,
-    quantity: showLabels ? `@ ${order.price.toFixed(2)}` : undefined,
-    lineColor: showLine ? color : "transparent",
-    lineStyle: "dashed",
-    lineWidth: 1,
-    bodyBackgroundColor: color,
-    bodyBorderColor: color,
-    bodyTextColor: "#FFFFFF",
-    isBodyVisible: showLabels,
-    quantityBackgroundColor: color,
-    quantityBorderColor: color,
-    quantityColor: "#FFFFFF",
-    isQuantityVisible: showLabels,
-    cancelButtonBackgroundColor: color,
-    cancelButtonBorderColor: color,
-    cancelButtonIconColor: "#FFFFFF",
+    align,
+    editable,
+    extendLeft,
+    extendRight,
+    marginLeft,
+    quantity: showQuantity ? `@ ${order.price.toFixed(2)}` : undefined,
+    lineColor: showLine ? lineColor : "transparent",
+    lineStyle: lineStyle ?? "dashed",
+    lineWidth: lineWidth ?? 1,
+    bodyBackgroundColor,
+    bodyBorderColor,
+    bodyTextColor,
+    isBodyVisible: showBody,
+    quantityBackgroundColor,
+    quantityBorderColor,
+    quantityTextColor,
+    isQuantityVisible: showQuantity,
+    cancelButtonBackgroundColor,
+    cancelButtonBorderColor,
+    cancelButtonIconColor,
     isCancelButtonVisible: !!onCancel,
+    yAxisLabelTextColor,
+    yAxisLabelBackgroundColor,
+    yAxisLabelBorderColor,
+    yAxisLabelBorderSize,
+    borderRadius: borderRadius ?? 0,
+    borderSize,
     onModify,
     onCancel,
     onMove,

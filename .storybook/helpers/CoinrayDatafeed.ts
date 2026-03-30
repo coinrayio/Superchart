@@ -159,7 +159,7 @@ export class CoinrayDatafeed implements Datafeed {
           volume: candle.baseVolume,
         })
       }
-    ).then((unsubscribe) => {
+    ).then((unsubscribe: () => Promise<void>) => {
       this.subscriptions.set(listenerGuid, unsubscribe)
     }).catch((error: any) => {
       console.error('Error subscribing to candles:', error)

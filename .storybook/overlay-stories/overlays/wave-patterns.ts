@@ -1,13 +1,14 @@
-import type {Chart, Nullable} from "klinecharts"
+import type {Chart, Nullable} from "@superchart"
 
 type Point = {timestamp: number, value: number}
 
 function createWaveOverlay(chart: Chart, name: string, points: Point[]): Nullable<string> {
-  return chart.createOverlay({
+  const result = chart.createOverlay({
     name,
     points,
     lock: true,
   })
+  return Array.isArray(result) ? result[0] ?? null : result
 }
 
 // threeWaves: 4 points (totalStep 5)

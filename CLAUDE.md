@@ -106,6 +106,28 @@ Stories live in `.storybook/overlay-stories/`. Stubs in `.storybook/overlay-stor
 
 Uses LESS for stylesheets. Variables and mixins in `src/lib/base.less`, main styles in `src/lib/index.less`.
 
+## Re-export policy (klinecharts → Superchart)
+
+Consumers should import from `superchart`, not `klinecharts`. When adding new types or factory functions to `packages/coinray-chart`:
+
+1. Export the new type/function from `packages/coinray-chart/src/index.ts`
+2. Re-export it from `src/lib/index.ts` (Superchart's entry point)
+
+**DO re-export** (consumer-facing):
+- Factory functions: `createOrderLine`, `createPriceLine`, `createTradeLine`
+- Core types consumers reference: `Chart`, `Nullable`, `DeepPartial`, `KLineData`, `Point`, `Styles`
+- Overlay types: `Overlay`, `OverlayCreate`, `OverlayEvent`, `OverlayProperties`, `ProOverlayTemplate`
+- Indicator types: `Indicator`, `IndicatorCreate`
+- Fluent API types: `OrderLine`, `PriceLine`, `TradeLine` and their `*Properties` interfaces
+
+**DO NOT re-export** (engine internals):
+- Rendering: `View`, `Widget`, `Pane`, `DrawPane`, `Figure`, `FigureImp`
+- Axes: `XAxis`, `YAxis`, `Axis`
+- Internal state: `Store`, `Action`, `EventHandler`
+- Canvas utilities: `Canvas`, `Bounding`, `Coordinate`
+- Registration functions: `registerFigure`, `registerOverlay`, `registerIndicator` (Superchart handles registration)
+- Internal helpers: `utils`, `isProOverlayTemplate`, `createPropertiesStore`
+
 ## Coinray SDK usage
 
 ```typescript

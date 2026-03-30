@@ -2,7 +2,7 @@
  * Generic Popup Component
  */
 
-import { type CSSProperties, type ReactNode, type MouseEvent } from 'react'
+import { useCallback, type CSSProperties, type ReactNode, type MouseEvent } from 'react'
 
 export interface PopupProps {
   open?: boolean
@@ -16,12 +16,7 @@ export interface PopupProps {
   children?: ReactNode
 }
 
-function getScreenSize() {
-  return {
-    x: typeof window !== 'undefined' ? window.innerWidth : 1024,
-    y: typeof window !== 'undefined' ? window.innerHeight : 768,
-  }
-}
+const MARGIN = 8
 
 export function Popup({
   open,
@@ -36,20 +31,16 @@ export function Popup({
 }: PopupProps) {
   if (!open) return null
 
-  const MARGIN = 8
   const vpW = typeof window !== 'undefined' ? window.innerWidth : 1024
   const vpH = typeof window !== 'undefined' ? window.innerHeight : 768
 
   const styleObj: CSSProperties = {
     ...(style ?? {}),
     position: 'absolute',
-    overflow: 'auto',
   }
 
   if (typeof top === 'number') {
-    styleObj.maxHeight = `${getScreenSize().y - top - MARGIN}px`
-    const topPx = Math.max(MARGIN, Math.min(top, vpH - MARGIN - 40))
-    styleObj.top = `${topPx}px`
+    styleObj.top = `${top}px`
   } else {
     styleObj.maxHeight = '50%'
     styleObj.top = '50%'
@@ -57,9 +48,7 @@ export function Popup({
   }
 
   if (typeof left === 'number') {
-    styleObj.maxWidth = `${left - MARGIN}px`
-    const leftPx = Math.max(MARGIN, Math.min(left, vpW - MARGIN - 40))
-    styleObj.left = `${leftPx}px`
+    styleObj.left = `${left}px`
     if (typeof top === 'number') styleObj.transform = undefined
   } else {
     styleObj.maxWidth = '50%'
@@ -69,6 +58,30 @@ export function Popup({
       : 'translateX(-50%)'
   }
 
+  // After mount, measure the popup and shift it so it stays within the viewport
+  const popupRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const rect = node.getBoundingClientRect()
+    // Vertical: shift up if overflowing bottom, down if above top
+    if (typeof top === 'number') {
+      const overflowBottom = rect.bottom - (vpH - MARGIN)
+      if (overflowBottom > 0) {
+        node.style.top = `${Math.max(MARGIN, top - overflowBottom)}px`
+      } else if (rect.top < MARGIN) {
+        node.style.top = `${MARGIN}px`
+      }
+    }
+    // Horizontal: shift left if overflowing right, right if past left edge
+    if (typeof left === 'number') {
+      const overflowRight = rect.right - (vpW - MARGIN)
+      if (overflowRight > 0) {
+        node.style.left = `${Math.max(MARGIN, left - overflowRight)}px`
+      } else if (rect.left < MARGIN) {
+        node.style.left = `${MARGIN}px`
+      }
+    }
+  }, [top, left, vpH, vpW])
+
   return (
     <div
       className="superchart-popup_background"
@@ -77,6 +90,7 @@ export function Popup({
       onMouseLeave={(e) => onMouseLeave?.(e)}
     >
       <div
+        ref={popupRef}
         className={`popup ${className ?? ''}`}
         style={styleObj}
         onPointerDown={(e) => e.stopPropagation()}

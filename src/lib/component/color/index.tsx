@@ -3,6 +3,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, type CSSProperties, type ReactNode, type PointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import chroma from 'chroma-js'
 
 export interface ColorProps {
@@ -159,6 +160,14 @@ export function Color({
     setOpacity(newOpacity)
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // When defaultOpen is true, compute position on mount (openPicker is never called)
+  useEffect(() => {
+    if (defaultOpen) {
+      setOriginalColor(finalColor)
+      requestAnimationFrame(computeDropdownPos)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Custom picker state
   const [customMode, setCustomMode] = useState(false)
   const [pickerHex, setPickerHex] = useState<string>((value as string) ?? '#000000')
@@ -178,10 +187,12 @@ export function Color({
     const dropH = 380
     let top = rect.bottom + 4
     let left = rect.left
-    // Clamp to viewport
+    // Clamp to viewport — try below trigger first, flip above if needed, then clamp
     if (top + dropH > window.innerHeight) {
-      top = Math.max(4, rect.top - dropH - 4)
+      top = rect.top - dropH - 4
     }
+    // Ensure it never goes above the viewport
+    top = Math.max(4, Math.min(top, window.innerHeight - dropH - 4))
     if (left + dropW > window.innerWidth) {
       left = Math.max(4, window.innerWidth - dropW - 4)
     }
@@ -239,16 +250,17 @@ export function Color({
     if (reactiveChange) onChange?.(x)
   }
 
-  const addOpacity = () => {
-    const op = opacity / 100
+  const applyOpacity = (newOpacity: number) => {
+    const op = newOpacity / 100
     const x = chroma(selectedColor as string).alpha(op).css()
     setFinalColor(x)
     if (reactiveChange) onChange?.(x)
   }
 
   const handleRangeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setOpacity(Number(event.target.value))
-    addOpacity()
+    const newOpacity = Number(event.target.value)
+    setOpacity(newOpacity)
+    applyOpacity(newOpacity)
   }
 
   // Custom picker helpers
@@ -334,7 +346,24 @@ export function Color({
         <i className="arrow" />
       </div>
 
-      <div ref={dropdownRef} className="drop-down-container" style={dropdownPos ? { position: 'fixed', left: dropdownPos.left, top: dropdownPos.top } : { left: '50%', top: '20%' }}>
+      {open && dropdownPos != null && createPortal(
+      <div
+        className="superchart-color-backdrop"
+        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+        onClick={cancelColorChange}
+      >
+      <div
+        ref={dropdownRef}
+        className="drop-down-container"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          left: dropdownPos?.left,
+          top: dropdownPos?.top,
+          visibility: 'visible',
+          opacity: 1,
+        }}
+      >
         {/* Color palette */}
         {!customMode &&
           colors.map((row, rowIndex) => (
@@ -544,6 +573,7 @@ export function Color({
           </span>
         </div>
       </div>
+      </div>, triggerRef.current?.closest('[data-theme]') as Element ?? document.body)}
     </div>
   )
 }

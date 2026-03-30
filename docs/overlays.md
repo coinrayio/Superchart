@@ -223,65 +223,240 @@ Overlays are grouped into categories for the drawing bar UI:
 
 ## Order Lines
 
-Order lines are horizontal price-level overlays designed specifically for visualizing open orders.
+Order lines are horizontal price-level overlays for visualizing open orders, positions, and alerts. The API follows the TradingView `createOrderLine()` pattern with getter/setter pairs and fluent chaining.
+
+### Creating an Order Line
 
 ```typescript
-// Re-exported from klinecharts
-function createOrderLine(chart: Chart, price: number, properties?: DeepPartial<OrderLineProperties>): OrderLine
+import { createOrderLine } from 'superchart'
+import type { Chart } from 'superchart'
+
+const chart: Chart = superchart.getChart()!
+
+const orderLine = createOrderLine(chart, {
+  price: 49500,
+  text: 'Buy 0.5 BTC',
+  quantity: '0.5 BTC',
+  lineColor: '#4caf50',
+  lineStyle: 'dashed',
+  bodyBackgroundColor: '#4caf50',
+  bodyTextColor: '#FFFFFF',
+  editable: true,  // can be dragged to new price (default: true)
+})
+  .onCancel({ orderId: '123' }, (params) => cancelOrder(params.orderId))
+  .onModify({ orderId: '123' }, (params) => modifyOrder(params.orderId))
 ```
 
-```typescript
-const chart = new Superchart({ ... })
-const klineChart = chart.getChart()
+### OrderLine (fluent API)
 
-if (klineChart) {
-  const orderLine = createOrderLine(klineChart, 49500, {
-    line: { color: '#F57F17', style: 'dashed', size: 1 },
-    // ...
-  })
-}
-```
-
-### OrderLine
-
-The object returned by `createOrderLine`. Provides methods for updating and removing the line:
+All setters return `this` for chaining. Getters follow the TradingView `getX()`/`setX()` pattern.
 
 ```typescript
 export interface OrderLine {
-  setPrice(price: number): void
-  setVisible(visible: boolean): void
-  setProperties(properties: DeepPartial<OrderLineProperties>): void
-  dispose(): void
-  onMouseEnter(listener: OrderLineEventListener): void
-  onMouseLeave(listener: OrderLineEventListener): void
-  onClick(listener: OrderLineEventListener): void
-  onRightClick(listener: OrderLineEventListener): void
-}
+  readonly id: string
+  readonly paneId: string
 
-export type OrderLineEventListener = (orderLine: OrderLine, event: MouseEvent) => void
+  // Core data
+  getPrice(): number | undefined
+  setPrice(price: number): OrderLine
+  getText(): string | undefined
+  setText(text: string): OrderLine
+  getQuantity(): number | string | undefined
+  setQuantity(quantity: number | string): OrderLine
+  getTooltip(): string | undefined
+  setTooltip(tooltip: string): OrderLine
+  getModifyTooltip(): string | undefined
+  setModifyTooltip(tooltip: string): OrderLine
+  getCancelTooltip(): string | undefined
+  setCancelTooltip(tooltip: string): OrderLine
+
+  // Behavior
+  getEditable(): boolean         // default: true
+  setEditable(editable: boolean): OrderLine
+  getExtendLeft(): boolean
+  setExtendLeft(extend: boolean): OrderLine
+
+  // Layout
+  setAlign(align: 'left' | 'right'): OrderLine
+  setMarginLeft(margin: number): OrderLine
+  setMarginRight(margin: number): OrderLine
+
+  // Line styling
+  getLineColor(): string | undefined
+  setLineColor(color: string): OrderLine
+  getLineWidth(): number | undefined
+  setLineWidth(width: number): OrderLine
+  getLineStyle(): 'solid' | 'dashed' | undefined
+  setLineStyle(style: 'solid' | 'dashed'): OrderLine
+  setLineDashedValue(dashedValue: number[]): OrderLine
+  getLineLength(): number | undefined
+  setLineLength(length: number): OrderLine
+
+  // Body label
+  getBodyFont(): string | undefined
+  setBodyFont(font: string): OrderLine
+  setBodyFontWeight(weight: number | string): OrderLine
+  getBodyTextColor(): string | undefined
+  setBodyTextColor(color: string): OrderLine
+  getBodyBackgroundColor(): string | undefined
+  setBodyBackgroundColor(color: string): OrderLine
+  getBodyBorderColor(): string | undefined
+  setBodyBorderColor(color: string): OrderLine
+
+  // Quantity label
+  getQuantityFont(): string | undefined
+  setQuantityFont(font: string): OrderLine
+  setQuantityFontWeight(weight: number | string): OrderLine
+  getQuantityTextColor(): string | undefined
+  setQuantityTextColor(color: string): OrderLine
+  getQuantityBackgroundColor(): string | undefined
+  setQuantityBackgroundColor(color: string): OrderLine
+  getQuantityBorderColor(): string | undefined
+  setQuantityBorderColor(color: string): OrderLine
+
+  // Cancel button
+  getCancelButtonIconColor(): string | undefined
+  setCancelButtonIconColor(color: string): OrderLine
+  getCancelButtonBackgroundColor(): string | undefined
+  setCancelButtonBackgroundColor(color: string): OrderLine
+  getCancelButtonBorderColor(): string | undefined
+  setCancelButtonBorderColor(color: string): OrderLine
+
+  // Shared border
+  setBorderStyle(style: 'solid' | 'dashed'): OrderLine
+  setBorderSize(size: number): OrderLine
+  setBorderRadius(radius: number): OrderLine
+
+  // Visibility
+  setBodyVisible(visible: boolean): OrderLine
+  setQuantityVisible(visible: boolean): OrderLine
+  setCancelButtonVisible(visible: boolean): OrderLine
+
+  // Events (generic T for consumer data)
+  onMoveStart<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onMove<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onMoveEnd<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onCancel<T>(params: T, callback: (params: T, event?) => void): OrderLine
+  onModify<T>(params: T, callback: (params: T, event?) => void): OrderLine
+
+  // Lifecycle
+  getProperties(): OrderLineProperties
+  remove(): void
+}
 ```
+
+### Sections
+
+Each order line renders three sections (left to right): **body**, **quantity**, **cancelButton**.
+
+| Section | Interaction | Use case |
+|---|---|---|
+| body | Draggable (when `editable: true`), click does nothing | Label text (e.g. "Buy 0.5 BTC") |
+| quantity | Click calls `onModify` | Size/price display |
+| cancelButton | Click calls `onCancel` | X icon to cancel order |
+
+All sections are independently toggle-able via `setBodyVisible()`, `setQuantityVisible()`, and `setCancelButtonVisible()`. Hidden sections leave no gap.
+
+### Alignment
+
+```typescript
+// Right-aligned (default) — labels near the y-axis
+createOrderLine(chart, { price: 50000, text: 'Limit Buy', align: 'right' })
+
+// Left-aligned — labels at the left edge (e.g. "AVG ENTRY")
+createOrderLine(chart, { price: 50000, text: 'AVG ENTRY', align: 'left', marginLeft: 10 })
+```
+
+### Price Lines
+
+The overlay draws two dashed lines that skip the label area:
+- **price-line-left**: left chart edge → labels start
+- **price-line-right**: labels end → right chart edge
+
+This prevents the line from showing through transparent label backgrounds.
 
 ### OrderLineProperties
 
 ```typescript
 export interface OrderLineProperties {
-  line: OrderLineStyle
-  text: {
-    color: string
-    paddingLeft: number
-    paddingRight: number
-    paddingTop: number
-    paddingBottom: number
-    borderRadius: number
-    backgroundColor: string
-    content: string
-  }
+  price?: number
+  text?: string
+  quantity?: number | string
+  tooltip?: string
+  modifyTooltip?: string
+  cancelTooltip?: string
+
+  // Layout
+  align?: 'left' | 'right'
+  marginRight?: number
+  marginLeft?: number
+
+  // Behavior
+  editable?: boolean       // default: true (draggable)
+  extendLeft?: boolean
+
+  // Line
+  lineColor?: string
+  lineWidth?: number
+  lineStyle?: 'solid' | 'dashed'
+  lineDashedValue?: number[]
+  lineLength?: number
+
+  // Body label
+  bodyFont?: string
+  bodyFontSize?: number
+  bodyFontWeight?: number | string
+  bodyTextColor?: string
+  bodyBackgroundColor?: string
+  bodyBorderColor?: string
+  bodyPaddingLeft?: number
+  bodyPaddingRight?: number
+  bodyPaddingTop?: number
+  bodyPaddingBottom?: number
+  isBodyVisible?: boolean
+
+  // Quantity label
+  quantityFont?: string
+  quantityFontSize?: number
+  quantityFontWeight?: number | string
+  quantityTextColor?: string
+  quantityBackgroundColor?: string
+  quantityBorderColor?: string
+  quantityPaddingLeft?: number
+  quantityPaddingRight?: number
+  quantityPaddingTop?: number
+  quantityPaddingBottom?: number
+  isQuantityVisible?: boolean
+
+  // Cancel button
+  cancelButtonFontSize?: number
+  cancelButtonFontWeight?: number | string
+  cancelButtonIconColor?: string
+  cancelButtonBackgroundColor?: string
+  cancelButtonBorderColor?: string
+  cancelButtonPaddingLeft?: number
+  cancelButtonPaddingRight?: number
+  cancelButtonPaddingTop?: number
+  cancelButtonPaddingBottom?: number
+  isCancelButtonVisible?: boolean
+
+  // Shared border
+  borderStyle?: 'solid' | 'dashed'
+  borderSize?: number
+  borderDashedValue?: number[]
+  borderRadius?: number             // default: 0
+
+  // Events
+  onMoveStart?: OrderLineEventListener
+  onMove?: OrderLineEventListener
+  onMoveEnd?: OrderLineEventListener
+  onCancel?: OrderLineEventListener
+  onModify?: OrderLineEventListener
 }
 
-export interface OrderLineStyle {
-  color: string
-  style: 'solid' | 'dashed' | 'dotted'
-  size: number
+export interface OrderLineEventListener {
+  params: unknown
+  callback: (params: unknown, event?: OverlayEvent) => void
 }
 ```
 
@@ -440,3 +615,212 @@ chart.createOverlay({
   },
 })
 ```
+
+---
+
+## Custom Overlays
+
+Superchart exposes registration APIs that let consumers define and register custom overlay types, figure primitives, and indicator templates.
+
+### Registration Functions
+
+```typescript
+import {
+  registerOverlay,
+  registerFigure,
+  registerIndicator,
+} from 'superchart'
+
+// Types for defining templates
+import type {
+  OverlayTemplate,
+  FigureTemplate,
+  IndicatorTemplate,
+  ProOverlayTemplate,
+} from 'superchart'
+```
+
+| Function | Description |
+|---|---|
+| `registerOverlay(template)` | Register a custom overlay type (drawing tool) |
+| `registerFigure(template)` | Register a custom figure primitive (canvas shape) |
+| `registerIndicator(template)` | Register a custom indicator template |
+
+**Important:** Call registration functions **before** creating the chart (`new Superchart()`), or before the first `createOverlay()` call that uses the custom name.
+
+### Example: Simple Emoji Marker Overlay
+
+A minimal overlay that renders a single emoji at the clicked position:
+
+```typescript
+import { registerOverlay } from 'superchart'
+import type { OverlayTemplate } from 'superchart'
+
+const myEmojiOverlay: OverlayTemplate = {
+  name: 'myEmoji',
+  totalStep: 2,  // click once to place
+  needDefaultPointFigure: false,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length === 0) return []
+    const emoji = (overlay.extendData as { text?: string })?.text ?? '📌'
+
+    return [{
+      type: 'text',
+      attrs: {
+        x: coordinates[0].x,
+        y: coordinates[0].y,
+        text: emoji,
+        align: 'center',
+        baseline: 'middle',
+      },
+      styles: {
+        color: '#000000',
+        size: 24,
+        backgroundColor: 'transparent',
+        borderSize: 0,
+        paddingLeft: 0, paddingRight: 0,
+        paddingTop: 0, paddingBottom: 0,
+      },
+    }]
+  },
+}
+
+registerOverlay(myEmojiOverlay)
+
+// Usage:
+const chart = superchart.getChart()
+chart?.createOverlay({
+  name: 'myEmoji',
+  points: [{ timestamp: Date.now(), value: 50000 }],
+  extendData: { text: '🚀' },
+})
+```
+
+### Example: Split-Line Overlay with Text Gap
+
+An overlay that renders a horizontal line split into two segments with label text in the gap (like orderLine or breakEvenLine):
+
+```typescript
+import { registerOverlay, utils } from 'superchart'
+
+const { calcTextWidth } = utils
+
+registerOverlay({
+  name: 'labeledPriceLine',
+  totalStep: 2,
+
+  createPointFigures: ({ coordinates, bounding, overlay }) => {
+    if (coordinates.length === 0) return []
+    const y = coordinates[0].y
+    const data = overlay.extendData as { text?: string; color?: string } | null
+    const text = data?.text ?? ''
+    const color = data?.color ?? '#FF5252'
+
+    if (text.length === 0) {
+      return [{ type: 'line', attrs: { coordinates: [{ x: 0, y }, { x: bounding.width, y }] }, styles: { color } }]
+    }
+
+    const textW = calcTextWidth(text, 12, 'normal')
+    const gap = textW + 12
+    const midX = bounding.width / 2
+
+    return [
+      // Left line
+      { type: 'line', attrs: { coordinates: [{ x: 0, y }, { x: midX - gap / 2, y }] }, styles: { color }, ignoreEvent: true },
+      // Right line
+      { type: 'line', attrs: { coordinates: [{ x: midX + gap / 2, y }, { x: bounding.width, y }] }, styles: { color }, ignoreEvent: true },
+      // Label
+      { type: 'text', attrs: { x: midX, y, text, align: 'center', baseline: 'middle' },
+        styles: { color, size: 12, backgroundColor: 'transparent', borderSize: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 } },
+    ]
+  },
+})
+```
+
+### Example: Custom Figure Primitive
+
+Register a custom canvas figure that overlays can reference by name:
+
+```typescript
+import { registerFigure } from 'superchart'
+
+registerFigure({
+  name: 'diamond',
+  checkEventOn: (coordinate, attrs, styles) => {
+    const { x, y, size = 10 } = attrs
+    return Math.abs(coordinate.x - x) + Math.abs(coordinate.y - y) <= size
+  },
+  draw: (ctx, attrs, styles) => {
+    const { x, y, size = 10 } = attrs
+    const { color = '#FF5252' } = styles
+    ctx.beginPath()
+    ctx.moveTo(x, y - size)
+    ctx.lineTo(x + size, y)
+    ctx.lineTo(x, y + size)
+    ctx.lineTo(x - size, y)
+    ctx.closePath()
+    ctx.fillStyle = color
+    ctx.fill()
+  },
+})
+
+// Use in a custom overlay:
+registerOverlay({
+  name: 'diamondMarker',
+  totalStep: 2,
+  createPointFigures: ({ coordinates }) => [{
+    type: 'diamond',  // references the registered figure
+    attrs: { x: coordinates[0].x, y: coordinates[0].y, size: 8 },
+    styles: { color: '#FFD700' },
+  }],
+})
+```
+
+### ProOverlayTemplate (Advanced)
+
+For overlays that need per-instance property management (like orderLine), use the `ProOverlayTemplate` factory pattern:
+
+```typescript
+import { registerOverlay } from 'superchart'
+import type { ProOverlayTemplate } from 'superchart'
+
+function myOverlayFactory(): ProOverlayTemplate {
+  // Per-instance state via closure
+  let properties: Record<string, unknown> = {}
+
+  return {
+    name: 'myProOverlay',
+    totalStep: 2,
+
+    createPointFigures: ({ coordinates, overlay }) => {
+      const ext = overlay.extendData as Record<string, unknown> | null
+      const color = (ext?.color ?? properties.color ?? '#FF0000') as string
+      // ... render figures using merged properties
+      return []
+    },
+
+    setProperties: (newProps, id) => {
+      properties = { ...properties, ...newProps }
+    },
+
+    getProperties: (id) => ({ ...properties }),
+  }
+}
+
+registerOverlay(myOverlayFactory())
+```
+
+### Built-in Overlay Types
+
+These custom overlays are registered by Superchart and available for use:
+
+| Name | Description |
+|---|---|
+| `orderLine` | Horizontal price line with body/quantity/cancel sections |
+| `emojiMarker` | Single emoji character at a point |
+| `timeAlertLine` | Vertical line split with rotated text label |
+| `breakEvenLine` | Horizontal line split with text label in gap |
+| `trendlineAlertLine` | Two-point segment with angle-matched rotated text |
