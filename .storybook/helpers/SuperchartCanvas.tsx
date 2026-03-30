@@ -102,7 +102,10 @@ export function SuperchartCanvas({
         chartSetPeriod.current = p.text
         onPeriodChangeRef.current?.(p)
       },
-      onVisibleRangeChange: (r) => {
+      onVisibleRangeChange: () => {
+        const range = superchart.getChart()?.getVisibleRangeTimestamps()
+        if (!range) return
+        const r = {from: range.from / 1000, to: range.to / 1000}
         chartSetVisibleRange.current = true
         onVisibleRangeChangeRef.current?.(r)
       },
