@@ -118,7 +118,6 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor,
     idsRef.current = []
   }
 
-  // Set initial points once we have chart data
   useEffect(() => {
     if (!chart || !currentPrice || points) return
     const dataList = chart.getDataList()

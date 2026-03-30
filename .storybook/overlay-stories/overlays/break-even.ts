@@ -15,12 +15,13 @@ export interface BreakEvenHandle {
 
 export function createBreakEven(chart: Chart, price: number, color = "#D05DDF", text = "Break Even"): BreakEvenHandle | null {
   const id = chart.createOverlay({
-    name: "breakEvenLine",
+    name: "priceLevelLine",
     points: [{value: price}],
     lock: false,
     visible: true,
     extendData: {
       text,
+      textAlign: "right",
       textColor: color,
       lineColor: color,
       lineStyle: "solid",

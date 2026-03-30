@@ -1,7 +1,7 @@
 import type {Chart, Nullable, OverlayEvent} from "@superchart"
 
 // ---------------------------------------------------------------------------
-// Time Alert — vertical line with text label
+// Time Alert — vertical line with text label (uses verticalLine overlay)
 // ---------------------------------------------------------------------------
 
 export interface TimeAlertLineOptions {
@@ -38,7 +38,7 @@ export function createTimeAlertLine(
   } = options
 
   const id = chart.createOverlay({
-    name: "timeAlertLine",
+    name: "timeLine",
     points: [{timestamp, value: 0}],
     lock,
     extendData: {
@@ -51,7 +51,7 @@ export function createTimeAlertLine(
 }
 
 // ---------------------------------------------------------------------------
-// Trendline Alert — segment with text label (bell + label at midpoint)
+// Trendline Alert — styled segment with text label at midpoint
 // ---------------------------------------------------------------------------
 
 type Point = {timestamp: number, value: number}
@@ -90,12 +90,13 @@ export function createTrendlineAlertLine(
   } = options
 
   const id = chart.createOverlay({
-    name: "trendlineAlertLine",
+    name: "styledSegment",
     points,
     lock,
     extendData: {
       lineColor: color, lineWidth, lineStyle,
       text, textColor, textFontSize,
+      ignoreEvent: false,
     },
     ...callbacks,
   }) as Nullable<string>
