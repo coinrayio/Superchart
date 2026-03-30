@@ -17,7 +17,6 @@ import type {
   Styles,
   OverlayCreate,
   OverlayMode,
-  VisibleRange,
 } from 'klinecharts'
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
@@ -322,22 +321,15 @@ export default class Superchart implements SuperchartApi {
           // Subscribe to visible range changes from the underlying chart
           const chart = api.getChart()
           if (chart) {
-            const handler = (data?: unknown): void => {
+            const handler = (): void => {
               if (this._listeners.visibleRangeChange.size === 0) return
-              const range = data as VisibleRange
-              const dataList = chart.getDataList()
-              // Clamp realTo to the last valid data index — realTo can exceed
-              // dataList.length when there is empty space after the last candle
-              const clampedTo = Math.min(range.realTo, dataList.length - 1)
-              const fromTs = dataList[range.realFrom]?.timestamp ?? 0
-              const toTs = dataList[clampedTo]?.timestamp ?? 0
-              if (fromTs > 0 && toTs > 0) {
-                const timeRange: VisibleTimeRange = {
-                  from: Math.floor(fromTs / 1000),
-                  to: Math.floor(toTs / 1000),
-                }
-                this._listeners.visibleRangeChange.forEach(cb => cb(timeRange))
+              const ts = chart.getVisibleRangeTimestamps()
+              if (ts === null) return
+              const timeRange: VisibleTimeRange = {
+                from: Math.floor(ts.from / 1000),
+                to: Math.floor(ts.to / 1000),
               }
+              this._listeners.visibleRangeChange.forEach(cb => cb(timeRange))
             }
             chart.subscribeAction('onVisibleRangeChange', handler)
             this._unsubscribers.push(() => chart.unsubscribeAction('onVisibleRangeChange', handler))
