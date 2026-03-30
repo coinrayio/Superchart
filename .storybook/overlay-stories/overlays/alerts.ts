@@ -10,7 +10,6 @@ export interface TimeAlertLineOptions {
   lineStyle?: "solid" | "dashed"
   text?: string
   textColor?: string
-  textBackgroundColor?: string
   textFontSize?: number
   lock?: boolean
   onPressedMoveStart?: (event: OverlayEvent<unknown>) => boolean | void
@@ -33,7 +32,6 @@ export function createTimeAlertLine(
     lineStyle = "solid",
     text,
     textColor = "#FFFFFF",
-    textBackgroundColor = "#3ea6ff",
     textFontSize = 12,
     lock = false,
     ...callbacks
@@ -64,7 +62,6 @@ export interface TrendlineAlertLineOptions {
   lineStyle?: "solid" | "dashed"
   text?: string
   textColor?: string
-  textBackgroundColor?: string
   textFontSize?: number
   lock?: boolean
   onPressedMoveStart?: (event: OverlayEvent<unknown>) => boolean | void
@@ -87,7 +84,6 @@ export function createTrendlineAlertLine(
     lineStyle = "solid",
     text,
     textColor = "#FFFFFF",
-    textBackgroundColor = "#3ea6ff",
     textFontSize = 12,
     lock = false,
     ...callbacks
