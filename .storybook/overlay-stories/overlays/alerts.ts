@@ -44,6 +44,7 @@ export function createTimeAlertLine(
     extendData: {
       lineColor: color, lineWidth, lineStyle,
       text, textColor, textFontSize,
+      ignoreEvent: false,
     },
     ...callbacks,
   }) as Nullable<string>
