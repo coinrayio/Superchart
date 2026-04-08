@@ -225,6 +225,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
         formatter: {
           formatDate,
         },
+        debug: store.debug(),
       })
 
       if (!chart) return
