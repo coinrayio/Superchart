@@ -100,9 +100,11 @@ export class CoinrayDatafeed implements Datafeed {
     onError: (reason: string) => void
   ): void {
     const coinray = getCoinray(this.token)
-    const { countBack, to } = periodParams
+    const { from, countBack, to } = periodParams
     const end = to // Already in seconds
-    const start = end - (countBack * this.resolutionToSeconds(resolution))
+    const start = countBack > 0
+      ? end - (countBack * this.resolutionToSeconds(resolution))
+      : from // Use explicit from when countBack is 0 (range-based fetch)
 
     coinray.fetchCandles({
       coinraySymbol: symbolInfo.ticker,
@@ -164,6 +166,25 @@ export class CoinrayDatafeed implements Datafeed {
     }).catch((error: any) => {
       console.error('Error subscribing to candles:', error)
     })
+  }
+
+  getFirstCandleTime(
+    symbolName: string,
+    resolution: string,
+    callback: (timestamp: number | null) => void
+  ): void {
+    const coinray = getCoinray(this.token)
+    coinray.fetchFirstCandleTime({
+      coinraySymbol: symbolName,
+      resolution,
+    })
+      .then((startTime: Date | string) => {
+        callback(new Date(startTime).getTime())
+      })
+      .catch((error: unknown) => {
+        console.error('Error fetching first candle time:', error)
+        callback(null)
+      })
   }
 
   async unsubscribeBars(listenerGuid: string): Promise<void> {

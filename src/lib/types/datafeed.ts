@@ -166,6 +166,16 @@ export interface Datafeed {
    * Unsubscribe from real-time bar updates.
    */
   unsubscribeBars(subscriberUID: string): void
+
+  /**
+   * Get the timestamp of the oldest available candle for a symbol at a given resolution.
+   * Optional — used by the playback engine to validate start times.
+   */
+  getFirstCandleTime?(
+    symbolName: string,
+    resolution: string,
+    callback: (timestamp: number | null) => void
+  ): void
 }
 
 // ---------------------------------------------------------------------------

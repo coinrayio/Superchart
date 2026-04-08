@@ -8,6 +8,7 @@ const config: StorybookConfig = {
   stories: [
     "./overlay-stories/**/*.stories.@(ts|tsx)",
     "./api-stories/**/*.stories.@(ts|tsx)",
+    "./feature-stories/**/*.stories.@(ts|tsx)",
   ],
   framework: "@storybook/react-vite",
   viteFinal: (config) => {

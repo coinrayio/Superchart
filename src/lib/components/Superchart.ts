@@ -18,6 +18,7 @@ import type {
   OverlayCreate,
   OverlayMode,
   VisibleRange,
+  ReplayEngine,
 } from 'klinecharts'
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
@@ -252,6 +253,8 @@ export default class Superchart implements SuperchartApi {
     periodChange: new Set<(period: Period) => void>(),
     visibleRangeChange: new Set<(range: VisibleTimeRange) => void>(),
   }
+  /** Whether the replay error sync handler has been registered on the engine */
+  private _replayErrorSyncDone = false
   /** Cleanup functions for store/chart subscriptions */
   private _unsubscribers: Array<() => void> = []
   /** Set to true after constructor finishes store init, to avoid firing callbacks for initial values */
@@ -442,6 +445,47 @@ export default class Superchart implements SuperchartApi {
     })
   }
 
+  /**
+   * Access the underlying ReplayEngine directly.
+   * Returns null before the chart has finished mounting.
+   * Also registers the period-sync error handler on first access.
+   *
+   * @example
+   * ```ts
+   * sc.replay?.setCurrentTime(Date.now() - 3600_000)
+   * sc.replay?.onReplayStatusChange(status => console.log(status))
+   * ```
+   */
+  get replay(): ReplayEngine | null {
+    const chart = this.getChart()
+    if (!chart) return null
+    this._setupReplayErrorSync()
+    return chart.getReplayEngine()
+  }
+
+  /**
+   * Register a one-time handler on the engine that syncs the signal store's period
+   * back when the engine reverts it (e.g. after a failed resolution change).
+   * Must run after the chart is available. Safe to call multiple times — guarded by flag.
+   */
+  private _setupReplayErrorSync(): void {
+    if (this._replayErrorSyncDone) return
+    const chart = this.getChart()
+    if (!chart) return
+    this._replayErrorSyncDone = true
+
+    const unsub = chart.getReplayEngine().onReplayError(() => {
+      const ep = chart.getPeriod()
+      const sp = store.period()
+      if (ep !== null && sp !== null && (sp.type !== ep.type || sp.span !== ep.span)) {
+        const textMap: Record<string, string> = { second: 's', minute: 'm', hour: 'H', day: 'D', week: 'W', month: 'M' }
+        const text = `${ep.span}${textMap[ep.type] ?? ep.type}`
+        store.setPeriod({ type: ep.type, span: ep.span, text } as Period)
+      }
+    })
+    this._unsubscribers.push(unsub)
+  }
+
   resize(): void {
     this._api?.resize()
   }
@@ -513,6 +557,7 @@ export default class Superchart implements SuperchartApi {
     this._listeners.periodChange.clear()
     this._listeners.visibleRangeChange.clear()
     this._initialized = false
+    this._replayErrorSyncDone = false
 
     // Dispose providers before unmounting
     const provider = store.indicatorProvider()

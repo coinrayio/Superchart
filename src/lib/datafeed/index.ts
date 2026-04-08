@@ -291,6 +291,44 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       activeSubscriptions.delete(subscriberUID)
     },
 
+    getRange: (params) => {
+      const { symbol, period, from, to, callback } = params
+      const resolution = periodToResolution(period)
+
+      resolveSymbol(symbol.ticker).then((symbolInfo) => {
+        datafeed.getBars(
+          symbolInfo,
+          resolution,
+          {
+            from: Math.floor(from / 1000),
+            to: Math.floor(to / 1000),
+            countBack: 0,
+            firstDataRequest: false,
+          },
+          (bars) => {
+            const klineData = bars.map(barToKLineData)
+            klineData.sort((a, b) => a.timestamp - b.timestamp)
+            callback(klineData)
+          },
+          (error) => {
+            log('[DataLoader] getRange error:', error)
+            callback([])
+          }
+        )
+      }).catch((error) => {
+        log('[DataLoader] getRange resolveSymbol error:', error)
+        callback([])
+      })
+    },
+
+    getFirstCandleTime: datafeed.getFirstCandleTime != null
+      ? (params) => {
+          const { symbol, period, callback } = params
+          const resolution = periodToResolution(period)
+          datafeed.getFirstCandleTime!(symbol.ticker, resolution, callback)
+        }
+      : undefined,
+
     searchSymbols: (userInput, exchange, symbolType, onResult) => {
       datafeed.searchSymbols(userInput, exchange, symbolType, onResult)
     },
