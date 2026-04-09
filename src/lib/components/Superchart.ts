@@ -86,6 +86,14 @@ export interface VisibleTimeRange {
   to: number
 }
 
+/** Result from crosshair/click events — pixel coordinates + chart point */
+export interface PriceTimeResult {
+  /** Pixel coordinate on the chart canvas */
+  coordinate: { x: number; y: number }
+  /** Chart data point: timestamp (unix seconds) and price */
+  point: { time: number; price: number }
+}
+
 // ---- Main option types ----
 
 export interface SuperchartOptions {
@@ -147,6 +155,16 @@ export interface SuperchartOptions {
   onPeriodChange?: (period: Period) => void
   /** Called when the visible range changes (scroll, zoom, data load) */
   onVisibleRangeChange?: (range: VisibleTimeRange) => void
+  /** Called when the crosshair moves — provides current price + time under the cursor */
+  onCrosshairMoved?: (result: PriceTimeResult) => void
+  /** Called when the user clicks on the chart — provides the clicked price + time */
+  onSelect?: (result: PriceTimeResult) => void
+
+  /** Called when the user right-clicks on the chart — provides the clicked price + time */
+  onRightSelect?: (result: PriceTimeResult) => void
+
+  /** Called when the user double-clicks on the chart — provides the clicked price + time */
+  onDoubleSelect?: (result: PriceTimeResult) => void
 
   // Optional - Logging
   /** Enable debug logging (default: true). Set to false to silence non-essential logs. */
@@ -215,6 +233,10 @@ export interface SuperchartApi {
   onPeriodChange: (callback: (period: Period) => void) => () => void
   /** Subscribe to visible range changes. Returns unsubscribe function. */
   onVisibleRangeChange: (callback: (range: VisibleTimeRange) => void) => () => void
+  /** Subscribe to crosshair movement. Returns unsubscribe function. */
+  onCrosshairMoved: (callback: (result: PriceTimeResult) => void) => () => void
+  /** Subscribe to chart click/select. Returns unsubscribe function. */
+  onSelect: (callback: (result: PriceTimeResult) => void) => () => void
   /** Dispose the chart */
   dispose: () => void
 }
@@ -251,6 +273,10 @@ export default class Superchart implements SuperchartApi {
     symbolChange: new Set<(symbol: SymbolInfo) => void>(),
     periodChange: new Set<(period: Period) => void>(),
     visibleRangeChange: new Set<(range: VisibleTimeRange) => void>(),
+    crosshairMoved: new Set<(result: PriceTimeResult) => void>(),
+    select: new Set<(result: PriceTimeResult) => void>(),
+    rightSelect: new Set<(result: PriceTimeResult) => void>(),
+    doubleSelect: new Set<(result: PriceTimeResult) => void>(),
   }
   /** Cleanup functions for store/chart subscriptions */
   private _unsubscribers: Array<() => void> = []
@@ -319,6 +345,11 @@ export default class Superchart implements SuperchartApi {
           for (const fn of this._pendingToolbarCalls) fn()
           this._pendingToolbarCalls = []
 
+          // Clean up any previous chart subscriptions (React strict mode / HMR
+          // can call onApiReady multiple times with the same chart instance)
+          for (const unsub of this._unsubscribers) unsub()
+          this._unsubscribers = []
+
           // Subscribe to visible range changes from the underlying chart
           const chart = api.getChart()
           if (chart) {
@@ -341,6 +372,95 @@ export default class Superchart implements SuperchartApi {
             }
             chart.subscribeAction('onVisibleRangeChange', handler)
             this._unsubscribers.push(() => chart.unsubscribeAction('onVisibleRangeChange', handler))
+
+            // Crosshair moved — convert y to price via convertFromPixel
+            const crosshairHandler = (data?: unknown): void => {
+              if (this._listeners.crosshairMoved.size === 0) return
+              const cr = data as { x?: number; y?: number; timestamp?: number }
+              if (cr.x == null || cr.y == null) return
+              const pts = chart.convertFromPixel(
+                [{ x: cr.x, y: cr.y }],
+                { paneId: 'candle_pane' }
+              ) as Array<{ timestamp?: number; value?: number }>
+              const pt = pts[0]
+              const result: PriceTimeResult = {
+                coordinate: { x: cr.x, y: cr.y },
+                point: {
+                  time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
+                  price: pt.value ?? 0,
+                },
+              }
+              this._listeners.crosshairMoved.forEach(cb => cb(result))
+            }
+            chart.subscribeAction('onCrosshairChange', crosshairHandler)
+            this._unsubscribers.push(() => chart.unsubscribeAction('onCrosshairChange', crosshairHandler))
+
+            // Chart click/select — uses onChartClick action from klinecharts
+            const clickHandler = (data?: unknown): void => {
+              console.debug('[Superchart] onChartClick action received, listeners:', this._listeners.select.size)
+              if (this._listeners.select.size === 0) return
+              const cr = data as { x?: number; y?: number; timestamp?: number }
+              if (cr.x == null || cr.y == null) return
+              const pts = chart.convertFromPixel(
+                [{ x: cr.x, y: cr.y }],
+                { paneId: 'candle_pane' }
+              ) as Array<{ timestamp?: number; value?: number }>
+              const pt = pts[0]
+              const result: PriceTimeResult = {
+                coordinate: { x: cr.x, y: cr.y },
+                point: {
+                  time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
+                  price: pt.value ?? 0,
+                },
+              }
+              this._listeners.select.forEach(cb => cb(result))
+            }
+            chart.subscribeAction('onChartClick', clickHandler)
+            this._unsubscribers.push(() => chart.unsubscribeAction('onChartClick', clickHandler))
+
+            // Chart right-click — uses onChartRightClick action from klinecharts
+            const rightClickHandler = (data?: unknown): void => {
+              if (this._listeners.rightSelect.size === 0) return
+              const cr = data as { x?: number; y?: number; timestamp?: number }
+              if (cr.x == null || cr.y == null) return
+              const pts = chart.convertFromPixel(
+                [{ x: cr.x, y: cr.y }],
+                { paneId: 'candle_pane' }
+              ) as Array<{ timestamp?: number; value?: number }>
+              const pt = pts[0]
+              const result: PriceTimeResult = {
+                coordinate: { x: cr.x, y: cr.y },
+                point: {
+                  time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
+                  price: pt.value ?? 0,
+                },
+              }
+              this._listeners.rightSelect.forEach(cb => cb(result))
+            }
+            chart.subscribeAction('onChartRightClick', rightClickHandler)
+            this._unsubscribers.push(() => chart.unsubscribeAction('onChartRightClick', rightClickHandler))
+
+            // Chart double-click — uses onChartDoubleClick action from klinecharts
+            const doubleClickHandler = (data?: unknown): void => {
+              if (this._listeners.doubleSelect.size === 0) return
+              const cr = data as { x?: number; y?: number; timestamp?: number }
+              if (cr.x == null || cr.y == null) return
+              const pts = chart.convertFromPixel(
+                [{ x: cr.x, y: cr.y }],
+                { paneId: 'candle_pane' }
+              ) as Array<{ timestamp?: number; value?: number }>
+              const pt = pts[0]
+              const result: PriceTimeResult = {
+                coordinate: { x: cr.x, y: cr.y },
+                point: {
+                  time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
+                  price: pt.value ?? 0,
+                },
+              }
+              this._listeners.doubleSelect.forEach(cb => cb(result))
+            }
+            chart.subscribeAction('onChartDoubleClick', doubleClickHandler)
+            this._unsubscribers.push(() => chart.unsubscribeAction('onChartDoubleClick', doubleClickHandler))
           }
         },
         dataLoader: options.dataLoader,
@@ -357,6 +477,10 @@ export default class Superchart implements SuperchartApi {
     if (options.onSymbolChange) this._listeners.symbolChange.add(options.onSymbolChange)
     if (options.onPeriodChange) this._listeners.periodChange.add(options.onPeriodChange)
     if (options.onVisibleRangeChange) this._listeners.visibleRangeChange.add(options.onVisibleRangeChange)
+    if (options.onCrosshairMoved) this._listeners.crosshairMoved.add(options.onCrosshairMoved)
+    if (options.onSelect) this._listeners.select.add(options.onSelect)
+    if (options.onRightSelect) this._listeners.rightSelect.add(options.onRightSelect)
+    if (options.onDoubleSelect) this._listeners.doubleSelect.add(options.onDoubleSelect)
 
     // Subscribe to store signals for symbol/period changes
     // Set _initialized after store init so initial values don't fire callbacks
@@ -502,6 +626,26 @@ export default class Superchart implements SuperchartApi {
     return () => { this._listeners.visibleRangeChange.delete(callback) }
   }
 
+  onCrosshairMoved(callback: (result: PriceTimeResult) => void): () => void {
+    this._listeners.crosshairMoved.add(callback)
+    return () => { this._listeners.crosshairMoved.delete(callback) }
+  }
+
+  onSelect(callback: (result: PriceTimeResult) => void): () => void {
+    this._listeners.select.add(callback)
+    return () => { this._listeners.select.delete(callback) }
+  }
+
+  onRightSelect(callback: (result: PriceTimeResult) => void): () => void {
+    this._listeners.rightSelect.add(callback)
+    return () => { this._listeners.rightSelect.delete(callback) }
+  }
+
+  onDoubleSelect(callback: (result: PriceTimeResult) => void): () => void {
+    this._listeners.doubleSelect.add(callback)
+    return () => { this._listeners.doubleSelect.delete(callback) }
+  }
+
   /**
    * Dispose the chart and cleanup resources
    */
@@ -512,6 +656,10 @@ export default class Superchart implements SuperchartApi {
     this._listeners.symbolChange.clear()
     this._listeners.periodChange.clear()
     this._listeners.visibleRangeChange.clear()
+    this._listeners.crosshairMoved.clear()
+    this._listeners.select.clear()
+    this._listeners.rightSelect.clear()
+    this._listeners.doubleSelect.clear()
     this._initialized = false
 
     // Dispose providers before unmounting

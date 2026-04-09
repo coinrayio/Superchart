@@ -13,7 +13,11 @@ function PriceTimeSelectDemo({symbol}: PriceTimeSelectArgs) {
   const hoverRef = useRef<PriceTimeResult | null>(null)
   const [hover, setHover] = useState<PriceTimeResult | null>(null)
   const [selected, setSelected] = useState<PriceTimeResult | null>(null)
+  const [rightSelected, setRightSelected] = useState<PriceTimeResult | null>(null)
+  const [doubleSelected, setDoubleSelected] = useState<PriceTimeResult | null>(null)
   const [count, setCount] = useState(0)
+  const [rightCount, setRightCount] = useState(0)
+  const [doubleCount, setDoubleCount] = useState(0)
 
   const onReady = useCallback((sc: Superchart) => {
     superchartRef.current = sc
@@ -39,6 +43,14 @@ function PriceTimeSelectDemo({symbol}: PriceTimeSelectArgs) {
         setSelected(result)
         setCount((c) => c + 1)
       },
+      onRightSelect: (result) => {
+        setRightSelected(result)
+        setRightCount((c) => c + 1)
+      },
+      onDoubleSelect: (result) => {
+        setDoubleSelected(result)
+        setDoubleCount((c) => c + 1)
+      },
     })
 
     return cleanup
@@ -48,9 +60,10 @@ function PriceTimeSelectDemo({symbol}: PriceTimeSelectArgs) {
     const color = r ? (dim ? "#999" : "#fff") : "#555"
     return (
       <>
-        <span style={{color}}>{r ? r.price.toFixed(2) : "null"}</span>
+        <span style={{color}}>{r ? r.point.price.toFixed(2) : "null"}</span>
         {" / "}
-        <span style={{color}}>{r ? new Date(r.time * 1000).toLocaleString() : "null"}</span>
+        <span style={{color}}>{r ? new Date(r.point.time * 1000).toLocaleString() : "null"}</span>
+        {r && <span style={{color: "#666"}}>{` (${r.coordinate.x.toFixed(0)}, ${r.coordinate.y.toFixed(0)})`}</span>}
       </>
     )
   }
@@ -67,7 +80,9 @@ function PriceTimeSelectDemo({symbol}: PriceTimeSelectArgs) {
       }}>
         <div>Crosshair: {fmt(hover, true)}</div>
         <div>Selected: {fmt(selected, false)}</div>
-        <div>Clicks: <span style={{color: "#fff"}}>{count}</span></div>
+        <div>Right-Selected: {fmt(rightSelected, false)}</div>
+        <div>Double-Selected: {fmt(doubleSelected, false)}</div>
+        <div>Clicks: <span style={{color: "#fff"}}>{count}</span> / Right-Clicks: <span style={{color: "#fff"}}>{rightCount}</span> / Double-Clicks: <span style={{color: "#fff"}}>{doubleCount}</span></div>
       </div>
     </div>
   )
