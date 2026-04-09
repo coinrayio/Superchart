@@ -59,6 +59,7 @@ export type {
   SuperchartOptions,
   SuperchartApi,
   VisibleTimeRange,
+  PriceTimeResult,
   ToolbarButtonOptions,
   ToolbarDropdownOptions,
   ToolbarDropdownItem,
