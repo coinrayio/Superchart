@@ -449,6 +449,8 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
       onSymbolChange: () => () => {},
       onPeriodChange: () => () => {},
       onVisibleRangeChange: () => () => {},
+      onCrosshairMoved: () => () => {},
+      onSelect: () => () => {},
       dispose: () => {},
     }
 
