@@ -73,6 +73,16 @@ function App() {
       console.log('[Superchart] Visible range changed:', { from: new Date(range.from * 1000).toISOString(), to: new Date(range.to * 1000).toISOString() })
     })
 
+    // Debug: verify onSelect fires exactly once per click
+    let clickCount = 0
+    chart.onSelect((result) => {
+      clickCount++
+      console.log(`[Superchart] onSelect #${clickCount}:`, result.point, result.coordinate)
+    })
+    chart.onCrosshairMoved((result) => {
+      console.log('[Superchart] crosshair:', result.point.price.toFixed(2), new Date(result.point.time * 1000).toISOString())
+    })
+
     // Sample toolbar button — alerts the current symbol
     chart.createButton({
       text: 'Alert',
