@@ -48,7 +48,11 @@ export type {
   IndicatorCreate,
   IndicatorTemplate,
   FigureTemplate,
+  ReplayStatus,
 } from 'klinecharts'
+
+// ReplayEngine type — exported so consumers can type sc.replay
+export type { ReplayEngine } from 'klinecharts'
 
 // Superchart-specific types
 export type {
