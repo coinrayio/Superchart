@@ -167,6 +167,9 @@ export interface SuperchartOptions {
   /** Called when the user double-clicks on the chart — provides the clicked price + time */
   onDoubleSelect?: (result: PriceTimeResult) => void
 
+  /** Called when the chart is fully initialized and ready to draw. getChart() is guaranteed to return a Chart after this fires. */
+  onReady?: () => void
+
   // Optional - Logging
   /** Enable debug logging (default: true). Set to false to silence non-essential logs. */
   debug?: boolean
@@ -279,6 +282,10 @@ export default class Superchart implements SuperchartApi {
     rightSelect: new Set<(result: PriceTimeResult) => void>(),
     doubleSelect: new Set<(result: PriceTimeResult) => void>(),
   }
+  /** Whether the chart has completed initialization */
+  private _isReady = false
+  /** Callbacks waiting for the chart to become ready */
+  private _readyCallbacks: Array<() => void> = []
   /** Whether the replay error sync handler has been registered on the engine */
   private _replayErrorSyncDone = false
   /** Cleanup functions for store/chart subscriptions */
@@ -352,6 +359,11 @@ export default class Superchart implements SuperchartApi {
           // can call onApiReady multiple times with the same chart instance)
           for (const unsub of this._unsubscribers) unsub()
           this._unsubscribers = []
+
+          // Mark as ready and fire all waiting callbacks
+          this._isReady = true
+          for (const cb of this._readyCallbacks) cb()
+          this._readyCallbacks = []
 
           // Subscribe to visible range changes from the underlying chart
           const chart = api.getChart()
@@ -484,6 +496,7 @@ export default class Superchart implements SuperchartApi {
     if (options.onSelect) this._listeners.select.add(options.onSelect)
     if (options.onRightSelect) this._listeners.rightSelect.add(options.onRightSelect)
     if (options.onDoubleSelect) this._listeners.doubleSelect.add(options.onDoubleSelect)
+    if (options.onReady) this._readyCallbacks.push(options.onReady)
 
     // Subscribe to store signals for symbol/period changes
     // Set _initialized after store init so initial values don't fire callbacks
@@ -688,6 +701,23 @@ export default class Superchart implements SuperchartApi {
   onDoubleSelect(callback: (result: PriceTimeResult) => void): () => void {
     this._listeners.doubleSelect.add(callback)
     return () => { this._listeners.doubleSelect.delete(callback) }
+  }
+
+  /**
+   * Register a callback to be called when the chart is ready.
+   * If the chart is already ready, the callback fires immediately.
+   * Returns an unsubscribe function (no-op if already fired).
+   */
+  onReady(callback: () => void): () => void {
+    if (this._isReady) {
+      callback()
+      return () => {}
+    }
+    this._readyCallbacks.push(callback)
+    return () => {
+      const idx = this._readyCallbacks.indexOf(callback)
+      if (idx >= 0) this._readyCallbacks.splice(idx, 1)
+    }
   }
 
   /**
