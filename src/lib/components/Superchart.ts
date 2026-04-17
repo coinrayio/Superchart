@@ -144,6 +144,13 @@ export interface SuperchartOptions {
   drawingBarVisible?: boolean
   /** Show volume indicator (default: true) */
   showVolume?: boolean
+  /**
+   * Show the period bar (default: true). When false the bar is not rendered
+   * and the chart canvas reclaims the space. Per-button hide / disable is
+   * done by the consumer via CSS on `[data-button="<id>"]` — see the feature
+   * doc for button ids and example rules.
+   */
+  periodBarVisible?: boolean
 
   // Optional - Available options
   /** Available period options */
@@ -221,6 +228,8 @@ export interface SuperchartApi {
   openScriptEditor: (options?: { initialCode?: string; readOnly?: boolean }) => void
   /** Programmatically close the script editor panel */
   closeScriptEditor: () => void
+  /** Show or hide the entire period bar. */
+  setPeriodBarVisible: (visible: boolean) => void
   /**
    * Add a custom button to the period bar toolbar.
    * Returns the created HTMLButtonElement — set innerHTML, add event listeners, or apply classes freely.
@@ -318,6 +327,7 @@ export default class Superchart implements SuperchartApi {
     store.setTimezone(options.timezone ?? 'Etc/UTC')
     store.setMainIndicators(options.mainIndicators ?? [])
     store.setDrawingBarVisible(options.drawingBarVisible ?? false)
+    store.setPeriodBarVisible(options.periodBarVisible ?? true)
 
     store.setDebug(options.debug ?? true)
 
@@ -645,6 +655,10 @@ export default class Superchart implements SuperchartApi {
 
   closeScriptEditor(): void {
     this._api?.closeScriptEditor()
+  }
+
+  setPeriodBarVisible(visible: boolean): void {
+    this._api?.setPeriodBarVisible(visible)
   }
 
   createButton(options?: ToolbarButtonOptions): HTMLElement {
