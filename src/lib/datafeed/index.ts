@@ -15,7 +15,6 @@ import type {
 } from '../types/datafeed'
 import { periodToResolution } from '../types/datafeed'
 import * as store from '../store/chartStore'
-import { log } from '../utils/log'
 
 /** Default number of bars to request per page */
 const DEFAULT_COUNT_BACK = 500
@@ -176,8 +175,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       const { type, timestamp, symbol, period, callback } = params
       const resolution = periodToResolution(period)
 
-      log('[DataLoader] getBars called:', { type, ticker: symbol.ticker, resolution, timestamp })
-
       // Forward loading not supported - historical charts only load backwards
       if (type === 'backward') {
         callback([], { backward: false })
@@ -207,16 +204,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
         const to = Math.floor(toMs / 1000)
         const from = Math.floor(fromMs / 1000)
 
-        log('[DataLoader] getBars request:', {
-          type,
-          ticker: symbol.ticker,
-          resolution,
-          from: new Date(from * 1000).toISOString(),
-          to: new Date(to * 1000).toISOString(),
-          timestampMs: new Date(timestampMs).toISOString(),
-          period
-        })
-
         datafeed.getBars(
           symbolInfo,
           resolution,
@@ -229,14 +216,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
           (bars, meta) => {
             const klineData = bars.map(barToKLineData)
             const hasMore = !(meta?.noData ?? false)
-            log('[DataLoader] getBars response:', {
-              type,
-              barsCount: bars.length,
-              meta,
-              hasMore,
-              firstBar: bars[0]?.time,
-              lastBar: bars[bars.length - 1]?.time
-            })
             // Set both backward and forward flags explicitly
             // Backward: always allow loading older data if available
             // Forward: never allow loading future data (historical charts only)
@@ -311,12 +290,12 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
             callback(klineData)
           },
           (error) => {
-            log('[DataLoader] getRange error:', error)
+            console.error('DataLoader getRange error:', error)
             callback([])
           }
         )
       }).catch((error) => {
-        log('[DataLoader] getRange resolveSymbol error:', error)
+        console.error('DataLoader getRange resolveSymbol error:', error)
         callback([])
       })
     },

@@ -457,8 +457,6 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
     onApiReady(api)
   }, [onApiReady, pushOverlay, backendApi, timezone, symbol, period, locale])
 
-  log('[SuperchartComponent] About to render. symbol:', symbol, 'period:', period)
-
   return (
     <div
       className={`superchart ${className ?? ''}`}
