@@ -17,7 +17,6 @@ import type {
   Styles,
   OverlayCreate,
   OverlayMode,
-  VisibleRange,
   ReplayEngine,
 } from 'klinecharts'
 import { utils, dispose } from 'klinecharts'
