@@ -81,7 +81,13 @@ export function SuperchartCanvas({
 
     const superchart = new Superchart({
       container: containerRef.current,
-      symbol: {ticker: symbol, pricePrecision: 2, volumePrecision: 0},
+      symbol: {
+        ticker: symbol,
+        // Extract display name from coinray format: BINA_USDT_BTC → BTC/USDT
+        shortName: symbol.includes('_') ? (() => { const p = symbol.split('_'); return `${p[2]}/${p[1]}` })() : symbol,
+        pricePrecision: 2,
+        volumePrecision: 0,
+      },
       period: textToPeriod(period),
       dataLoader,
       theme,

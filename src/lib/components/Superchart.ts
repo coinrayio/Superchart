@@ -415,7 +415,6 @@ export default class Superchart implements SuperchartApi {
 
             // Chart click/select — uses onChartClick action from klinecharts
             const clickHandler = (data?: unknown): void => {
-              console.debug('[Superchart] onChartClick action received, listeners:', this._listeners.select.size)
               if (this._listeners.select.size === 0) return
               const cr = data as { x?: number; y?: number; timestamp?: number }
               if (cr.x == null || cr.y == null) return

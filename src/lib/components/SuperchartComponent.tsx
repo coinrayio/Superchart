@@ -10,6 +10,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
@@ -22,6 +23,8 @@ import type {
 import { ChartWidget, type ChartWidgetRef } from './ChartWidget'
 import type { UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { Period, SymbolInfo } from '../types/chart'
+import type { SuperchartDataLoader } from '../datafeed'
+import type { SearchSymbolResult } from '../types/datafeed'
 import type { SuperchartApi } from './Superchart'
 import * as store from '../store/chartStore'
 import { log } from '../utils/log'
@@ -135,6 +138,37 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
   const [settingModalVisible, setSettingModalVisible] = useState(false)
   const [screenshotUrl, setScreenshotUrl] = useState('')
   const [symbolSearchModalVisible, setSymbolSearchModalVisible] = useState(false)
+
+  // Symbol search config — re-read each time the modal opens (onReady is async)
+  const symbolSearchConfig = useMemo(() => {
+    if (!symbolSearchModalVisible) return null
+    const loader = dataLoader as SuperchartDataLoader
+    return typeof loader.getConfiguration === 'function' ? loader.getConfiguration() : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoader, symbolSearchModalVisible])
+
+  const symbolSearchDatafeed = useMemo(() => ({
+    searchSymbols: (query: string, exchange: string, symbolType: string) =>
+      new Promise<Array<{ ticker: string; name?: string; shortName?: string; exchange?: string; type?: string; logo?: string; exchangeLogo?: string }>>((resolve) => {
+        const loader = dataLoader as SuperchartDataLoader
+        if (typeof loader.searchSymbols !== 'function') {
+          resolve([])
+          return
+        }
+        loader.searchSymbols(query, exchange, symbolType, (results: SearchSymbolResult[]) => {
+          resolve(results.map(r => ({
+            ticker: r.symbol,
+            name: r.description ?? '',
+            shortName: r.full_name ?? r.symbol,
+            exchange: r.exchange ?? '',
+            type: r.type ?? '',
+            logo: r.logo,
+            exchangeLogo: r.exchange_logo,
+          })))
+        })
+      })
+  }), [dataLoader])
+
   const [scriptEditorVisible, setScriptEditorVisible] = useState(false)
   const [readOnlyEditorVisible, setReadOnlyEditorVisible] = useState(false)
   const [readOnlyEditorCode, setReadOnlyEditorCode] = useState('')
@@ -1265,10 +1299,15 @@ export function SuperchartComponent(props: SuperchartComponentProps) {
       {symbolSearchModalVisible && (
         <SymbolSearchModal
           locale={locale}
-          datafeed={dataLoader as any}
+          datafeed={symbolSearchDatafeed}
+          symbolsTypes={symbolSearchConfig?.symbolsTypes}
+          exchanges={symbolSearchConfig?.exchanges}
           onSymbolSelected={(newSymbol) => {
             store.setSymbol({
-              ...newSymbol,
+              ticker: newSymbol.ticker,
+              shortName: newSymbol.shortName,
+              name: newSymbol.name,
+              exchange: newSymbol.exchange,
               pricePrecision: newSymbol.pricePrecision ?? 2,
               volumePrecision: newSymbol.volumePrecision ?? 0,
             })

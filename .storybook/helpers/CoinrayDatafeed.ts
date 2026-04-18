@@ -2,7 +2,8 @@
  * Coinray Datafeed - TradingView-compatible datafeed using Coinray API
  */
 
-import Coinray from 'coinrayjs'
+// @ts-expect-error — CoinrayCache is exported from coinrayjs but has no type declarations
+import Coinray, { CoinrayCache } from 'coinrayjs'
 import type { Candle as CoinrayCandle, CandlePayload } from 'coinrayjs'
 import type {
   Datafeed,
@@ -32,6 +33,20 @@ function getCoinray(token: string): Coinray {
   return coinrayInstance
 }
 
+// Singleton CoinrayCache instance (has getMarkets after initialize())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cacheInstance: any = null
+let cacheReady: Promise<void> | null = null
+
+function getCoinrayCacheReady(token: string): Promise<any> {
+  if (!cacheInstance) {
+    cacheInstance = new CoinrayCache(token, {}, 30 * 1000)
+    cacheInstance.onTokenExpired(async () => token)
+    cacheReady = cacheInstance.initialize()
+  }
+  return (cacheReady ?? Promise.resolve()).then(() => cacheInstance)
+}
+
 export class CoinrayDatafeed implements Datafeed {
   private token: string
   private subscriptions = new Map<string, () => Promise<void>>()
@@ -46,19 +61,89 @@ export class CoinrayDatafeed implements Datafeed {
         supportedResolutions: ['1', '5', '15', '30', '60', '240', '1D', '1W', '1M'],
         supports_marks: false,
         supports_timescale_marks: false,
+        symbolsTypes: [
+          { name: 'Crypto', value: 'crypto' },
+        ],
+        exchanges: [
+          { value: 'BINA', name: 'Binance' },
+          { value: 'BIFU', name: 'Binance Futures' },
+          { value: 'BIUS', name: 'Binance US' },
+          { value: 'BNGX', name: 'BingX' },
+          { value: 'BNGXF', name: 'BingX Futures' },
+          { value: 'BITMF', name: 'BitMart' },
+          { value: 'BMEX', name: 'Bitmex' },
+          { value: 'BVVO', name: 'Bitvavo' },
+          { value: 'BYBI', name: 'ByBit' },
+          { value: 'BYBIF', name: 'ByBit Futures' },
+          { value: 'GDAX', name: 'Coinbase' },
+          { value: 'CRO', name: 'Crypto.com' },
+          { value: 'GATE', name: 'Gate.io' },
+          { value: 'HUBI', name: 'HTX' },
+          { value: 'HITB', name: 'HitBTC' },
+          { value: 'HYPERLIQUID', name: 'Hyperliquid' },
+          { value: 'HYPERLIQUIDF', name: 'Hyperliquid Futures' },
+          { value: 'KRKN', name: 'Kraken' },
+          { value: 'KUCN', name: 'Kucoin' },
+          { value: 'KUCNF', name: 'Kucoin Futures' },
+          { value: 'MEXC', name: 'Mexc' },
+          { value: 'OKEX', name: 'OKX' },
+          { value: 'PLNX', name: 'Poloniex' },
+          { value: 'TBITF', name: 'Toobit' },
+          { value: 'WOO', name: 'WOO' },
+        ],
       })
     }, 0)
   }
 
   searchSymbols(
-    _userInput: string,
-    _exchange: string,
+    userInput: string,
+    exchange: string,
     _symbolType: string,
     onResult: (results: SearchSymbolResult[]) => void
   ): void {
-    // For now, return empty results
-    // You could implement this by calling Coinray's market search API
-    setTimeout(() => onResult([]), 0)
+    const query = (userInput ?? '').toLowerCase()
+    const exchangeFilter = exchange?.toUpperCase() || ''
+
+    getCoinrayCacheReady(this.token)
+      .then((cache: Record<string, unknown>) => {
+        // Markets are stored per-exchange: cache.exchanges.BINA.markets, etc.
+        // Market fields from Coinray API: coinraySymbol, symbol, baseCurrency, quoteCurrency, exchangeCode
+        const allExchanges = cache.exchanges as Record<string, { code?: string; name?: string; logo?: string; markets?: Record<string, Record<string, unknown>> }> | undefined
+        const allMarkets: Array<{ coinraySymbol: string; displaySymbol: string; base: string; quote: string; exchangeCode: string; exchangeName: string; exchangeLogo: string }> = []
+        for (const [code, ex] of Object.entries(allExchanges ?? {})) {
+          if (exchangeFilter && code !== exchangeFilter) continue
+          for (const m of Object.values(ex.markets ?? {})) {
+            allMarkets.push({
+              coinraySymbol: (m.coinraySymbol ?? '') as string,
+              displaySymbol: (m.symbol ?? m.symbolAlt ?? '') as string,
+              base: (m.baseCurrency ?? '') as string,
+              quote: (m.quoteCurrency ?? '') as string,
+              exchangeCode: (m.exchangeCode ?? code) as string,
+              exchangeName: ex.name ?? code,
+              exchangeLogo: (ex.logo ?? '') as string,
+            })
+          }
+        }
+        const results: SearchSymbolResult[] = allMarkets
+          .filter(m => {
+            if (!query) return true
+            const sym = m.displaySymbol.toLowerCase()
+            const base = m.base.toLowerCase()
+            const quote = m.quote.toLowerCase()
+            return sym.includes(query) || base.includes(query) || quote.includes(query)
+          })
+          .slice(0, 50)
+          .map(m => ({
+            symbol: m.coinraySymbol,
+            full_name: `${m.base}/${m.quote}`,
+            description: `${m.base} / ${m.quote}`,
+            exchange: m.exchangeName,
+            exchange_logo: m.exchangeLogo || undefined,
+            type: 'crypto',
+          }))
+        onResult(results)
+      })
+      .catch(() => onResult([]))
   }
 
   resolveSymbol(
