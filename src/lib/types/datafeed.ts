@@ -98,16 +98,20 @@ export interface HistoryMetadata {
 // ---------------------------------------------------------------------------
 
 export interface SearchSymbolResult {
-  /** Symbol ticker */
+  /** Symbol ticker (internal ID used by the datafeed) */
   symbol: string
-  /** Full display name */
+  /** Full display name (e.g. "BTC/USDT") */
   full_name: string
-  /** Human-readable description */
+  /** Human-readable description (e.g. "Bitcoin / Tether") */
   description?: string
   /** Exchange name */
   exchange?: string
-  /** Symbol type */
+  /** Symbol type (e.g. "crypto", "forex", "stock") */
   type?: string
+  /** Symbol logo URL */
+  logo?: string
+  /** Exchange logo URL */
+  exchange_logo?: string
 }
 
 // ---------------------------------------------------------------------------

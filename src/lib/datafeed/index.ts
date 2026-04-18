@@ -9,6 +9,7 @@
 import type { DataLoader, KLineData, Period as BasePeriod } from 'klinecharts'
 import type {
   Datafeed,
+  DatafeedConfiguration,
   LibrarySymbolInfo,
   Bar,
   SearchSymbolResult,
@@ -90,6 +91,9 @@ export interface SuperchartDataLoader extends DataLoader {
     onResult: (results: SearchSymbolResult[]) => void
   ): void
 
+  /** Datafeed configuration from onReady (exchanges, symbolsTypes, etc.) */
+  getConfiguration(): DatafeedConfiguration | null
+
   /**
    * Register a callback that fires whenever a range of bars is successfully loaded.
    * fromMs is the start of the loaded range in milliseconds.
@@ -141,8 +145,9 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
   const barsLoadedRef: { callback: ((fromMs: number) => void) | null } = { callback: null }
 
   // Initialize datafeed configuration
-  datafeed.onReady(() => {
-    // Configuration loaded
+  let datafeedConfig: DatafeedConfiguration | null = null
+  datafeed.onReady((config) => {
+    datafeedConfig = config
   })
 
   /**
@@ -331,6 +336,10 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
 
     searchSymbols: (userInput, exchange, symbolType, onResult) => {
       datafeed.searchSymbols(userInput, exchange, symbolType, onResult)
+    },
+
+    getConfiguration() {
+      return datafeedConfig
     },
 
     setOnBarsLoaded(cb: (fromMs: number) => void) {

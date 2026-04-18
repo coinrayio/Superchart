@@ -51,14 +51,36 @@ export class CoinrayDatafeed implements Datafeed {
   }
 
   searchSymbols(
-    _userInput: string,
+    userInput: string,
     _exchange: string,
     _symbolType: string,
     onResult: (results: SearchSymbolResult[]) => void
   ): void {
-    // For now, return empty results
-    // You could implement this by calling Coinray's market search API
-    setTimeout(() => onResult([]), 0)
+    if (!userInput) {
+      setTimeout(() => onResult([]), 0)
+      return
+    }
+    const query = userInput.toLowerCase()
+    try {
+      const allMarkets = (getCoinray(this.token) as unknown as { getMarkets: () => Record<string, unknown> }).getMarkets() as Record<string, { coinraySymbol?: string; baseSymbol?: string; quoteSymbol?: string; exchange?: string }>
+      const results: SearchSymbolResult[] = Object.values(allMarkets)
+        .filter(m => {
+          const sym = (m.coinraySymbol ?? '').toLowerCase()
+          const base = (m.baseSymbol ?? '').toLowerCase()
+          return sym.includes(query) || base.includes(query)
+        })
+        .slice(0, 50)
+        .map(m => ({
+          symbol: m.coinraySymbol ?? '',
+          full_name: `${m.baseSymbol ?? ''}/${m.quoteSymbol ?? ''}`,
+          description: `${m.baseSymbol ?? ''}/${m.quoteSymbol ?? ''} on ${m.exchange ?? ''}`,
+          exchange: m.exchange ?? '',
+          type: 'crypto',
+        }))
+      onResult(results)
+    } catch {
+      onResult([])
+    }
   }
 
   resolveSymbol(

@@ -1,39 +1,269 @@
 @import (reference) '../../base.less';
 
-.@{prefix-cls}-symbol-search-modal-input {
-  margin: 20px 0 10px 0;
-  height: 40px;
-  svg {
-    width: 18px;
-    height: 18px;
-    fill: var(--superchart-text-second-color);
-  }
-  .value {
-    font-size: 16px;
+// TradingView-style symbol search overlay
+.@{prefix-cls}-symbol-search-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 99;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 40px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.@{prefix-cls}-symbol-search-panel {
+  width: 620px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: var(--superchart-popover-background-color);
+  border: 1px solid var(--superchart-border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+// Title bar
+.@{prefix-cls}-symbol-search-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--superchart-text-color);
+}
+
+.@{prefix-cls}-symbol-search-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--superchart-text-second-color);
+  cursor: pointer;
+  &:hover {
+    background: var(--superchart-hover-background-color);
+    color: var(--superchart-text-color);
   }
 }
 
-.@{prefix-cls}-symbol-search-modal-list {
-  height: 400px;
-  margin-left: -20px;
-  margin-right: -20px;
-  li {
-    justify-content: space-between;
-    div {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      img {
-        width: 16px;
-        height: 16px;
-        margin-right: 6px;
-      }
-      span {
-        width: 300px;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-      }
-    }
+// Search input row
+.@{prefix-cls}-symbol-search-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--superchart-border-color);
+  border-radius: 6px;
+  background: var(--superchart-background-color);
+}
+
+.@{prefix-cls}-symbol-search-icon {
+  flex-shrink: 0;
+  color: var(--superchart-text-second-color);
+}
+
+.@{prefix-cls}-symbol-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--superchart-text-color);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  &::placeholder {
+    color: var(--superchart-text-second-color);
+    font-weight: 400;
   }
+}
+
+.@{prefix-cls}-symbol-search-clear {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--superchart-border-color);
+  color: var(--superchart-text-second-color);
+  cursor: pointer;
+  &:hover {
+    color: var(--superchart-text-color);
+  }
+}
+
+// Symbol type tabs (All, Crypto, Forex, etc.)
+.@{prefix-cls}-symbol-search-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--superchart-border-color);
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.@{prefix-cls}-symbol-search-tab {
+  padding: 4px 12px;
+  border: 1px solid var(--superchart-border-color);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--superchart-text-second-color);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s;
+  &:hover {
+    background: var(--superchart-hover-background-color);
+    color: var(--superchart-text-color);
+    border-color: var(--superchart-text-second-color);
+  }
+  &.active {
+    background: var(--superchart-primary-color);
+    border-color: var(--superchart-primary-color);
+    color: #fff;
+  }
+}
+
+// Exchange filter
+.@{prefix-cls}-symbol-search-exchange-filter {
+  padding: 4px 20px 8px;
+  border-bottom: 1px solid var(--superchart-border-color);
+}
+
+.@{prefix-cls}-symbol-search-exchange-select {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--superchart-border-color);
+  border-radius: 4px;
+  background: var(--superchart-background-color);
+  color: var(--superchart-text-color);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+// Results list
+.@{prefix-cls}-symbol-search-results {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  max-height: 420px;
+}
+
+.@{prefix-cls}-symbol-search-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100px;
+  color: var(--superchart-text-second-color);
+  font-size: 13px;
+}
+
+// Result row
+.@{prefix-cls}-symbol-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 20px;
+  cursor: pointer;
+  transition: background 0.1s;
+  &:hover, &.active {
+    background: var(--superchart-hover-background-color);
+  }
+}
+
+// Symbol logo
+.@{prefix-cls}-symbol-search-logo-wrap {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.@{prefix-cls}-symbol-search-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.@{prefix-cls}-symbol-search-logo-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--superchart-border-color);
+}
+
+// Ticker (bold, left column)
+.@{prefix-cls}-symbol-search-ticker {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--superchart-text-color);
+  white-space: nowrap;
+  min-width: 90px;
+  mark {
+    background: transparent;
+    color: var(--superchart-primary-color);
+    font-weight: 700;
+  }
+}
+
+// Description (middle, flexible)
+.@{prefix-cls}-symbol-search-desc {
+  flex: 1;
+  font-size: 13px;
+  color: var(--superchart-text-second-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  mark {
+    background: transparent;
+    color: var(--superchart-primary-color);
+  }
+}
+
+// Type badge
+.@{prefix-cls}-symbol-search-type {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--superchart-text-second-color);
+  white-space: nowrap;
+}
+
+// Exchange (right column)
+.@{prefix-cls}-symbol-search-exchange {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--superchart-text-second-color);
+  white-space: nowrap;
+  min-width: 70px;
+  justify-content: flex-end;
+}
+
+.@{prefix-cls}-symbol-search-exchange-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
 }
