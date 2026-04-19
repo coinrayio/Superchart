@@ -26,16 +26,6 @@ export function textToPeriod(text: string): Period {
   return PERIOD_MAP[text] || PERIOD_MAP["1H"]
 }
 
-export interface ContextMenuItem {
-  text?: string
-  icon?: string
-  hotkey?: string
-  onClick?: () => void
-  type?: "item" | "separator"
-}
-
-export type OnContextMenu = (time: number, price: number) => ContextMenuItem[]
-
 interface Props {
   symbol?: string
   period?: string
@@ -46,7 +36,9 @@ interface Props {
   onPeriodChange?: (period: Period) => void
   onVisibleRangeChange?: (range: VisibleTimeRange) => void
   visibleRange?: VisibleTimeRange | null
-  onContextMenu?: OnContextMenu
+  periodBarVisible?: boolean
+  /** Inline CSS appended to a `<style>` tag, scoped under the container. */
+  extraCss?: string
 }
 
 export function SuperchartCanvas({
@@ -59,7 +51,8 @@ export function SuperchartCanvas({
   onSymbolChange,
   onPeriodChange,
   onVisibleRangeChange,
-  onContextMenu,
+  periodBarVisible = true,
+  extraCss,
 }: Props) {
   const [theme, setTheme] = useState<"dark" | "light">(themeProp)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -88,12 +81,18 @@ export function SuperchartCanvas({
 
     const superchart = new Superchart({
       container: containerRef.current,
-      symbol: {ticker: symbol, pricePrecision: 2, volumePrecision: 0},
+      symbol: {
+        ticker: symbol,
+        // Extract display name from coinray format: BINA_USDT_BTC → BTC/USDT
+        shortName: symbol.includes('_') ? (() => { const p = symbol.split('_'); return `${p[2]}/${p[1]}` })() : symbol,
+        pricePrecision: 2,
+        volumePrecision: 0,
+      },
       period: textToPeriod(period),
       dataLoader,
       theme,
       debug: false,
-      onContextMenu,
+      periodBarVisible,
       onSymbolChange: (s) => {
         chartSetSymbol.current = s.ticker
         onSymbolChangeRef.current?.(s)
@@ -102,7 +101,10 @@ export function SuperchartCanvas({
         chartSetPeriod.current = p.text
         onPeriodChangeRef.current?.(p)
       },
-      onVisibleRangeChange: (r) => {
+      onVisibleRangeChange: () => {
+        const range = superchart.getChart()?.getVisibleRangeTimestamps()
+        if (!range) return
+        const r = {from: range.from / 1000, to: range.to / 1000}
         chartSetVisibleRange.current = true
         onVisibleRangeChangeRef.current?.(r)
       },
@@ -173,6 +175,12 @@ export function SuperchartCanvas({
     superchartRef.current.setTheme(theme)
   }, [theme])
 
+  // Sync period-bar visibility
+  useEffect(() => {
+    if (!mountedRef.current || !superchartRef.current) return
+    superchartRef.current.setPeriodBarVisible(periodBarVisible)
+  }, [periodBarVisible])
+
   if (!TOKEN) {
     return (
       <div style={{padding: 20, color: "#f44", fontFamily: "monospace"}}>
@@ -185,6 +193,7 @@ export function SuperchartCanvas({
 
   return (
     <div style={{width: "100%", height: "100vh", display: "flex", flexDirection: "column"}}>
+      {extraCss && <style>{extraCss}</style>}
       <div ref={containerRef} style={{width: "100%", flex: 1}} />
       <div style={{
         display: "flex",

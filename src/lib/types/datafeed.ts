@@ -98,16 +98,20 @@ export interface HistoryMetadata {
 // ---------------------------------------------------------------------------
 
 export interface SearchSymbolResult {
-  /** Symbol ticker */
+  /** Symbol ticker (internal ID used by the datafeed) */
   symbol: string
-  /** Full display name */
+  /** Full display name (e.g. "BTC/USDT") */
   full_name: string
-  /** Human-readable description */
+  /** Human-readable description (e.g. "Bitcoin / Tether") */
   description?: string
   /** Exchange name */
   exchange?: string
-  /** Symbol type */
+  /** Symbol type (e.g. "crypto", "forex", "stock") */
   type?: string
+  /** Symbol logo URL */
+  logo?: string
+  /** Exchange logo URL */
+  exchange_logo?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +170,16 @@ export interface Datafeed {
    * Unsubscribe from real-time bar updates.
    */
   unsubscribeBars(subscriberUID: string): void
+
+  /**
+   * Get the timestamp of the oldest available candle for a symbol at a given resolution.
+   * Optional — used by the playback engine to validate start times.
+   */
+  getFirstCandleTime?(
+    symbolName: string,
+    resolution: string,
+    callback: (timestamp: number | null) => void
+  ): void
 }
 
 // ---------------------------------------------------------------------------

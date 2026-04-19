@@ -27,6 +27,7 @@ function OnReadyDemo({symbol}: OnReadyArgs) {
       period: {type: "hour", span: 1, text: "1H"},
       dataLoader,
       theme: "dark",
+      debug: false,
     })
 
     superchartRef.current = superchart

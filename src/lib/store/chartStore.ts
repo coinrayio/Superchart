@@ -60,6 +60,9 @@ export const [loadingVisible, setLoadingVisible, subscribeLoadingVisible] = crea
 export const [drawingBarVisible, setDrawingBarVisible, subscribeDrawingBarVisible] = createSignal<boolean>(false)
 export const [fullScreen, setFullScreen, subscribeFullScreen] = createSignal<boolean>(false)
 
+// Period-bar visibility
+export const [periodBarVisible, setPeriodBarVisible, subscribePeriodBarVisible] = createSignal<boolean>(true)
+
 // Indicators
 export const [mainIndicators, setMainIndicators, subscribeMainIndicators] = createSignal<string[]>([])
 export const [subIndicators, setSubIndicators, subscribeSubIndicators] = createSignal<Record<string, string>>({})
@@ -106,6 +109,7 @@ export function resetStore(): void {
   setLoadingVisible(false)
   setDrawingBarVisible(false)
   setFullScreen(false)
+  setPeriodBarVisible(true)
   setMainIndicators([])
   setSubIndicators({})
   setSelectedOverlay(null)
@@ -122,29 +126,3 @@ export function resetStore(): void {
   setDebug(true)
 }
 
-/**
- * Get all store subscriptions in one object (useful for React hooks)
- */
-export const storeSubscriptions = {
-  instanceApi: subscribeInstanceApi,
-  symbol: subscribeSymbol,
-  period: subscribePeriod,
-  theme: subscribeTheme,
-  styles: subscribeStyles,
-  loadingVisible: subscribeLoadingVisible,
-  drawingBarVisible: subscribeDrawingBarVisible,
-  fullScreen: subscribeFullScreen,
-  mainIndicators: subscribeMainIndicators,
-  subIndicators: subscribeSubIndicators,
-  selectedOverlay: subscribeSelectedOverlay,
-  selectedOverlayPosition: subscribeSelectedOverlayPosition,
-  storageAdapter: subscribeStorageAdapter,
-  storageKey: subscribeStorageKey,
-  indicatorProvider: subscribeIndicatorProvider,
-  scriptProvider: subscribeScriptProvider,
-  chartModified: subscribeChartModified,
-  rootElementId: subscribeRootElementId,
-  locale: subscribeLocale,
-  timezone: subscribeTimezone,
-  screenshotUrl: subscribeScreenshotUrl,
-}

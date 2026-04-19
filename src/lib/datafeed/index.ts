@@ -9,13 +9,13 @@
 import type { DataLoader, KLineData, Period as BasePeriod } from 'klinecharts'
 import type {
   Datafeed,
+  DatafeedConfiguration,
   LibrarySymbolInfo,
   Bar,
   SearchSymbolResult,
 } from '../types/datafeed'
 import { periodToResolution } from '../types/datafeed'
 import * as store from '../store/chartStore'
-import { log } from '../utils/log'
 
 /** Default number of bars to request per page */
 const DEFAULT_COUNT_BACK = 500
@@ -90,6 +90,9 @@ export interface SuperchartDataLoader extends DataLoader {
     onResult: (results: SearchSymbolResult[]) => void
   ): void
 
+  /** Datafeed configuration from onReady (exchanges, symbolsTypes, etc.) */
+  getConfiguration(): DatafeedConfiguration | null
+
   /**
    * Register a callback that fires whenever a range of bars is successfully loaded.
    * fromMs is the start of the loaded range in milliseconds.
@@ -141,8 +144,9 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
   const barsLoadedRef: { callback: ((fromMs: number) => void) | null } = { callback: null }
 
   // Initialize datafeed configuration
-  datafeed.onReady(() => {
-    // Configuration loaded
+  let datafeedConfig: DatafeedConfiguration | null = null
+  datafeed.onReady((config) => {
+    datafeedConfig = config
   })
 
   /**
@@ -176,8 +180,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       const { type, timestamp, symbol, period, callback } = params
       const resolution = periodToResolution(period)
 
-      log('[DataLoader] getBars called:', { type, ticker: symbol.ticker, resolution, timestamp })
-
       // Forward loading not supported - historical charts only load backwards
       if (type === 'backward') {
         callback([], { backward: false })
@@ -207,16 +209,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
         const to = Math.floor(toMs / 1000)
         const from = Math.floor(fromMs / 1000)
 
-        log('[DataLoader] getBars request:', {
-          type,
-          ticker: symbol.ticker,
-          resolution,
-          from: new Date(from * 1000).toISOString(),
-          to: new Date(to * 1000).toISOString(),
-          timestampMs: new Date(timestampMs).toISOString(),
-          period
-        })
-
         datafeed.getBars(
           symbolInfo,
           resolution,
@@ -229,14 +221,6 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
           (bars, meta) => {
             const klineData = bars.map(barToKLineData)
             const hasMore = !(meta?.noData ?? false)
-            log('[DataLoader] getBars response:', {
-              type,
-              barsCount: bars.length,
-              meta,
-              hasMore,
-              firstBar: bars[0]?.time,
-              lastBar: bars[bars.length - 1]?.time
-            })
             // Set both backward and forward flags explicitly
             // Backward: always allow loading older data if available
             // Forward: never allow loading future data (historical charts only)
@@ -291,8 +275,50 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       activeSubscriptions.delete(subscriberUID)
     },
 
+    getRange: (params) => {
+      const { symbol, period, from, to, callback } = params
+      const resolution = periodToResolution(period)
+
+      resolveSymbol(symbol.ticker).then((symbolInfo) => {
+        datafeed.getBars(
+          symbolInfo,
+          resolution,
+          {
+            from: Math.floor(from / 1000),
+            to: Math.floor(to / 1000),
+            countBack: 0,
+            firstDataRequest: false,
+          },
+          (bars) => {
+            const klineData = bars.map(barToKLineData)
+            klineData.sort((a, b) => a.timestamp - b.timestamp)
+            callback(klineData)
+          },
+          (error) => {
+            console.error('DataLoader getRange error:', error)
+            callback([])
+          }
+        )
+      }).catch((error) => {
+        console.error('DataLoader getRange resolveSymbol error:', error)
+        callback([])
+      })
+    },
+
+    getFirstCandleTime: datafeed.getFirstCandleTime != null
+      ? (params) => {
+          const { symbol, period, callback } = params
+          const resolution = periodToResolution(period)
+          datafeed.getFirstCandleTime!(symbol.ticker, resolution, callback)
+        }
+      : undefined,
+
     searchSymbols: (userInput, exchange, symbolType, onResult) => {
       datafeed.searchSymbols(userInput, exchange, symbolType, onResult)
+    },
+
+    getConfiguration() {
+      return datafeedConfig
     },
 
     setOnBarsLoaded(cb: (fromMs: number) => void) {

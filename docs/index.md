@@ -202,3 +202,4 @@ src/lib/
 | [storage.md](./storage.md) | StorageAdapter, ChartState persistence, example adapters |
 | [overlays.md](./overlays.md) | Drawing tools, createOverlay, order lines, SavedOverlay |
 | [customization.md](./customization.md) | Themes, styles, locale, timezone, periods, watermark |
+| [replay.md](./replay.md) | ReplayEngine, playback API, partial candles, integration internals |

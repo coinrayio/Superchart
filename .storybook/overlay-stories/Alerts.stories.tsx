@@ -19,14 +19,13 @@ interface TimeAlertArgs {
   lock: boolean
   color: string
   textColor: string
-  textBackgroundColor: string
   textFontSize: number
   lineWidth: number
   lineStyle: "solid" | "dashed"
   symbol: string
 }
 
-function TimeAlertDemo({lock, color, textColor, textBackgroundColor, textFontSize, lineWidth, lineStyle, symbol}: TimeAlertArgs) {
+function TimeAlertDemo({lock, color, textColor, textFontSize, lineWidth, lineStyle, symbol}: TimeAlertArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
   const [alertTs, setAlertTs] = useState<number>(() => Date.now() + 2 * 60 * 60 * 1000)
   const idsRef = useRef<string[]>([])
@@ -76,7 +75,7 @@ function TimeAlertDemo({lock, color, textColor, textBackgroundColor, textFontSiz
 
     const id = createTimeAlertLine(chart, alertTs, {
       color, lineWidth, lineStyle, lock,
-      text, textColor, textBackgroundColor, textFontSize,
+      text, textColor, textFontSize,
       onPressedMoveEnd: handlePressedMoveEnd,
       onPressedMoving: handlePressedMoving,
       onSelected: handleSelected,
@@ -87,7 +86,7 @@ function TimeAlertDemo({lock, color, textColor, textBackgroundColor, textFontSiz
 
     if (id) idsRef.current.push(id)
     return clear
-  }, [chart, alertTs, lock, color, textColor, textBackgroundColor, textFontSize, lineWidth, lineStyle])
+  }, [chart, alertTs, lock, color, textColor, textFontSize, lineWidth, lineStyle])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
@@ -101,12 +100,11 @@ interface TrendlineAlertArgs {
   lineStyle: "solid" | "dashed"
   text: string
   textColor: string
-  textBackgroundColor: string
   textFontSize: number
   symbol: string
 }
 
-function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor, textBackgroundColor, textFontSize, symbol}: TrendlineAlertArgs) {
+function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor, textFontSize, symbol}: TrendlineAlertArgs) {
   const [chart, setChart] = useState<Chart | null>(null)
   const currentPrice = useCurrentPrice(chart)
   const [points, setPoints] = useState<[{timestamp: number, value: number}, {timestamp: number, value: number}] | null>(null)
@@ -120,7 +118,6 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor,
     idsRef.current = []
   }
 
-  // Set initial points once we have chart data
   useEffect(() => {
     if (!chart || !currentPrice || points) return
     const dataList = chart.getDataList()
@@ -173,7 +170,7 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor,
 
     const id = createTrendlineAlertLine(chart, points, {
       color, lineWidth, lineStyle, lock,
-      text, textColor, textBackgroundColor, textFontSize,
+      text, textColor, textFontSize,
       onPressedMoveEnd: handlePressedMoveEnd,
       onPressedMoving: handlePressedMoving,
       onSelected: handleSelected,
@@ -184,7 +181,7 @@ function TrendlineAlertDemo({lock, color, lineWidth, lineStyle, text, textColor,
 
     if (id) idsRef.current.push(id)
     return clear
-  }, [chart, points, lock, color, lineWidth, lineStyle, text, textColor, textBackgroundColor, textFontSize])
+  }, [chart, points, lock, color, lineWidth, lineStyle, text, textColor, textFontSize])
 
   return <SuperchartCanvas symbol={symbol} onChart={onChart} />
 }
@@ -259,7 +256,6 @@ export const TimeAlert: StoryObj<typeof TimeAlertDemo> = {
     lock: {control: "boolean", table: {category: "Behavior"}},
     color: {control: "color", table: {category: "Line"}},
     textColor: {control: "color", table: {category: "Label"}},
-    textBackgroundColor: {control: "color", table: {category: "Label"}},
     textFontSize: {control: {type: "number", min: 8, max: 24}, table: {category: "Label"}},
     lineWidth: {control: {type: "number", min: 1, max: 5}, table: {category: "Line"}},
     lineStyle: {control: "select", options: ["solid", "dashed"], table: {category: "Line"}},
@@ -269,7 +265,6 @@ export const TimeAlert: StoryObj<typeof TimeAlertDemo> = {
     lock: false,
     color: "#3ea6ff",
     textColor: "#FFFFFF",
-    textBackgroundColor: "#3ea6ff",
     textFontSize: 12,
     lineWidth: 1,
     lineStyle: "solid",
@@ -286,7 +281,6 @@ export const TrendlineAlert: StoryObj<typeof TrendlineAlertDemo> = {
     lineStyle: {control: "select", options: ["solid", "dashed"], table: {category: "Line"}},
     text: {control: "text", table: {category: "Label"}},
     textColor: {control: "color", table: {category: "Label"}},
-    textBackgroundColor: {control: "color", table: {category: "Label"}},
     textFontSize: {control: {type: "number", min: 8, max: 24}, table: {category: "Label"}},
     symbol: {control: "text", table: {category: "Chart"}},
   },
@@ -297,7 +291,6 @@ export const TrendlineAlert: StoryObj<typeof TrendlineAlertDemo> = {
     lineStyle: "solid",
     text: "Alert 🔔",
     textColor: "#FFFFFF",
-    textBackgroundColor: "#3ea6ff",
     textFontSize: 12,
     symbol: "BINA_USDT_BTC",
   },
