@@ -63,7 +63,7 @@ function PriceTimeSelectDemo({symbol}: PriceTimeSelectArgs) {
         <span style={{color}}>{r ? r.point.price.toFixed(2) : "null"}</span>
         {" / "}
         <span style={{color}}>{r ? new Date(r.point.time * 1000).toLocaleString() : "null"}</span>
-        {r && <span style={{color: "#666"}}>{` (${r.coordinate.x.toFixed(0)}, ${r.coordinate.y.toFixed(0)})`}</span>}
+        {r && <span style={{color: "#666"}}>{` canvas(${r.coordinate.x.toFixed(0)}, ${r.coordinate.y.toFixed(0)}) page(${r.coordinate.pageX.toFixed(0)}, ${r.coordinate.pageY.toFixed(0)})`}</span>}
       </>
     )
   }
