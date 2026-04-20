@@ -88,8 +88,13 @@ export interface VisibleTimeRange {
 
 /** Result from crosshair/click events — pixel coordinates + chart point */
 export interface PriceTimeResult {
-  /** Pixel coordinate on the chart canvas */
-  coordinate: { x: number; y: number }
+  /**
+   * Pixel coordinate on the chart canvas plus page-relative coordinates.
+   * `pageX`/`pageY` are only populated for click-family events (select /
+   * rightSelect / doubleSelect). For `crosshairMoved` they are 0 because
+   * the crosshair state has no native-event origin.
+   */
+  coordinate: { x: number; y: number; pageX: number; pageY: number }
   /** Chart data point: timestamp (unix seconds) and price */
   point: { time: number; price: number }
 }
@@ -401,7 +406,7 @@ export default class Superchart implements SuperchartApi {
               ) as Array<{ timestamp?: number; value?: number }>
               const pt = pts[0]
               const result: PriceTimeResult = {
-                coordinate: { x: cr.x, y: cr.y },
+                coordinate: { x: cr.x, y: cr.y, pageX: 0, pageY: 0 },
                 point: {
                   time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
                   price: pt.value ?? 0,
@@ -415,7 +420,7 @@ export default class Superchart implements SuperchartApi {
             // Chart click/select — uses onChartClick action from klinecharts
             const clickHandler = (data?: unknown): void => {
               if (this._listeners.select.size === 0) return
-              const cr = data as { x?: number; y?: number; timestamp?: number }
+              const cr = data as { x?: number; y?: number; pageX?: number; pageY?: number; timestamp?: number }
               if (cr.x == null || cr.y == null) return
               const pts = chart.convertFromPixel(
                 [{ x: cr.x, y: cr.y }],
@@ -423,7 +428,7 @@ export default class Superchart implements SuperchartApi {
               ) as Array<{ timestamp?: number; value?: number }>
               const pt = pts[0]
               const result: PriceTimeResult = {
-                coordinate: { x: cr.x, y: cr.y },
+                coordinate: { x: cr.x, y: cr.y, pageX: cr.pageX ?? 0, pageY: cr.pageY ?? 0 },
                 point: {
                   time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
                   price: pt.value ?? 0,
@@ -437,7 +442,7 @@ export default class Superchart implements SuperchartApi {
             // Chart right-click — uses onChartRightClick action from klinecharts
             const rightClickHandler = (data?: unknown): void => {
               if (this._listeners.rightSelect.size === 0) return
-              const cr = data as { x?: number; y?: number; timestamp?: number }
+              const cr = data as { x?: number; y?: number; pageX?: number; pageY?: number; timestamp?: number }
               if (cr.x == null || cr.y == null) return
               const pts = chart.convertFromPixel(
                 [{ x: cr.x, y: cr.y }],
@@ -445,7 +450,7 @@ export default class Superchart implements SuperchartApi {
               ) as Array<{ timestamp?: number; value?: number }>
               const pt = pts[0]
               const result: PriceTimeResult = {
-                coordinate: { x: cr.x, y: cr.y },
+                coordinate: { x: cr.x, y: cr.y, pageX: cr.pageX ?? 0, pageY: cr.pageY ?? 0 },
                 point: {
                   time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
                   price: pt.value ?? 0,
@@ -459,7 +464,7 @@ export default class Superchart implements SuperchartApi {
             // Chart double-click — uses onChartDoubleClick action from klinecharts
             const doubleClickHandler = (data?: unknown): void => {
               if (this._listeners.doubleSelect.size === 0) return
-              const cr = data as { x?: number; y?: number; timestamp?: number }
+              const cr = data as { x?: number; y?: number; pageX?: number; pageY?: number; timestamp?: number }
               if (cr.x == null || cr.y == null) return
               const pts = chart.convertFromPixel(
                 [{ x: cr.x, y: cr.y }],
@@ -467,7 +472,7 @@ export default class Superchart implements SuperchartApi {
               ) as Array<{ timestamp?: number; value?: number }>
               const pt = pts[0]
               const result: PriceTimeResult = {
-                coordinate: { x: cr.x, y: cr.y },
+                coordinate: { x: cr.x, y: cr.y, pageX: cr.pageX ?? 0, pageY: cr.pageY ?? 0 },
                 point: {
                   time: Math.floor((cr.timestamp ?? pt.timestamp ?? 0) / 1000),
                   price: pt.value ?? 0,
