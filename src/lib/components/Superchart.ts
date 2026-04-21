@@ -398,7 +398,7 @@ export default class Superchart implements SuperchartApi {
             // Crosshair moved — convert y to price via convertFromPixel
             const crosshairHandler = (data?: unknown): void => {
               if (this._listeners.crosshairMoved.size === 0) return
-              const cr = data as { x?: number; y?: number; timestamp?: number }
+              const cr = data as { x?: number; y?: number; pageX?: number; pageY?: number; timestamp?: number }
               if (cr.x == null || cr.y == null) return
               const pts = chart.convertFromPixel(
                 [{ x: cr.x, y: cr.y }],
