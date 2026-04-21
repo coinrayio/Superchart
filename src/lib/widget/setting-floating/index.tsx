@@ -12,9 +12,8 @@ import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from '
 import { Color } from '../../component'
 import DragIcon from '../icons/drag'
 import { Icon } from '../icons'
-import * as store from '../../store/chartStore'
+import { useChartStore } from '../../store/chartStoreContext'
 import { useChartState } from '../../hooks/useChartState'
-import { setPopupOverlay, setShowOverlaySetting } from '../../store/overlaySettingStore'
 import type { ProOverlay, OverlayProperties } from '../../types/overlay'
 import type { DeepPartial } from 'klinecharts'
 import {
@@ -58,18 +57,40 @@ const STYLE_OPTIONS: { key: LineStylePreset; icon: string }[] = [
 ]
 
 export function SettingFloating({ onClose, className }: FloatingProps) {
+  const store = useChartStore()
   const overlay = useStoreValue(store.selectedOverlay, store.subscribeSelectedOverlay) as ProOverlay | null
 
   const { popOverlay, modifyOverlay, modifyOverlayProperties } = useChartState()
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const [localPos, setLocalPos] = useState(() => ({
-    x: Math.max(500, window.innerWidth / 2),
-    y: 40,
-  }))
+  // Position is in the chart container's coordinate space (position: absolute
+  // relative to the nearest positioned ancestor — .superchart, which is
+  // position: relative). Each Superchart instance has its own container, so
+  // popups from different instances can't overlap or drag into each other.
+  const [localPos, setLocalPos] = useState<{ x: number; y: number }>(() => ({ x: 0, y: 40 }))
   const [dragging, setDragging] = useState(false)
   const [visibleEditorKey, setVisibleEditorKey] = useState<string | null>(null)
   const dragStartRef = useRef({ mx: 0, my: 0, sx: 0, sy: 0 })
+
+  // Returns the nearest positioned ancestor — the chart container — which
+  // anchors the popup's absolute positioning and bounds its drag movement.
+  const getChartContainer = useCallback((): HTMLElement | null => {
+    const el = containerRef.current
+    if (!el) return null
+    return (el.offsetParent as HTMLElement) ?? el.parentElement
+  }, [])
+
+  // Center horizontally within the chart container on first mount (the chart
+  // container's width isn't known at useState-initializer time, so we defer).
+  useEffect(() => {
+    const parent = getChartContainer()
+    if (!parent) return
+    const el = containerRef.current
+    const popupW = el?.offsetWidth ?? 220
+    const centerX = Math.max(0, (parent.offsetWidth - popupW) / 2)
+    setLocalPos({ x: centerX, y: 40 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlay?.id])
 
   // Local snapshot of overlay properties — ensures icons update immediately
   const [localProps, setLocalProps] = useState<Record<string, unknown>>({})
@@ -83,10 +104,19 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
     setLocalProps(props as Record<string, unknown>)
   }, [overlay?.id])
 
-  // Close on outside click
+  // Close on outside click — but treat portaled descendants (the color picker
+  // dropdown and its backdrop) as "inside" so interacting with the color
+  // picker doesn't dismiss the floating settings.
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      // Color picker is portaled out of our ref — don't treat it as outside
+      if (
+        target.closest('.superchart-color-backdrop') ||
+        target.closest('.drop-down-container')
+      ) return
+      if (containerRef.current && !containerRef.current.contains(target)) {
         setVisibleEditorKey(null)
         onClose?.()
       }
@@ -95,18 +125,22 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
     return () => document.removeEventListener('mousedown', handleDocumentClick)
   }, [onClose])
 
-  // Drag handlers
+  // Drag handlers — bounds are the chart container, not the window, so the
+  // popup cannot escape the Superchart instance it belongs to.
   const handleMouseMove = useCallback((e: MouseEvent) => {
     const { mx, my, sx, sy } = dragStartRef.current
     const nxRaw = sx + (e.clientX - mx)
     const nyRaw = sy + (e.clientY - my)
-    const maxX = Math.max(0, window.innerWidth - (containerRef.current?.offsetWidth ?? 220))
-    const maxY = Math.max(0, window.innerHeight - (containerRef.current?.offsetHeight ?? 48))
+    const parent = getChartContainer()
+    const parentW = parent?.offsetWidth ?? window.innerWidth
+    const parentH = parent?.offsetHeight ?? window.innerHeight
+    const maxX = Math.max(0, parentW - (containerRef.current?.offsetWidth ?? 220))
+    const maxY = Math.max(0, parentH - (containerRef.current?.offsetHeight ?? 48))
     setLocalPos({
       x: Math.min(Math.max(0, nxRaw), maxX),
       y: Math.min(Math.max(0, nyRaw), maxY),
     })
-  }, [])
+  }, [getChartContainer])
 
   const handleMouseUp = useCallback(() => {
     setDragging(false)
@@ -151,7 +185,7 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
       ref={containerRef}
       className={`cr-setting-floating ${className ?? ''} ${dragging ? 'dragging' : ''}`}
       style={{
-        position: 'fixed',
+        position: 'absolute',
         left: `${localPos.x}px`,
         top: `${localPos.y}px`,
         touchAction: 'none',
@@ -316,7 +350,7 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
 
         {/* Settings */}
         <div className="cr-action" title="Settings">
-          <div className="cr-action-btn" onClick={(e) => { e.stopPropagation(); setPopupOverlay(overlay); setShowOverlaySetting(true) }}>
+          <div className="cr-action-btn" onClick={(e) => { e.stopPropagation(); store.setPopupOverlay(overlay); store.setShowOverlaySetting(true) }}>
             <div className="cr-action-icon"><Icon name="settings" /></div>
           </div>
         </div>

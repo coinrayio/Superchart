@@ -17,10 +17,9 @@ import {
   type DeepPartial,
   type Styles,
 } from 'klinecharts'
-import * as store from '../store/chartStore'
+import { useChartStore } from '../store/chartStoreContext'
 import { useChartState } from '../hooks/useChartState'
 import { useBackendIndicators, type UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
-import { getAllOverlayTimeframeVisibility } from '../store/overlaySettingStore'
 import { isOverlayVisibleForPeriod } from '../types/overlay'
 import type { Period, SymbolInfo } from '../types/chart'
 
@@ -63,6 +62,7 @@ function useStoreValue<T>(
  */
 export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
   ({ dataLoader, watermark, styleOverrides, onIndicatorTooltipFeatureClick, onBackendIndicatorsReady }, ref) => {
+    const store = useChartStore()
     const containerRef = useRef<HTMLDivElement>(null)
     const priceUnitRef = useRef<HTMLSpanElement | null>(null)
 
@@ -136,7 +136,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
             return utils.formatDate(params.dateTimeFormat, params.timestamp, 'YYYY-MM-DD HH:mm')
         }
       },
-      []
+      [store]
     )
 
     // Keep a ref to the external handler so the subscribeAction callback never goes stale
@@ -194,7 +194,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
             break
         }
       },
-      [] // stable — reads external handler via ref
+      [store] // stable — reads external handler via ref
     )
 
     /**
@@ -202,7 +202,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
      */
     const handleResize = useCallback(() => {
       store.instanceApi()?.resize()
-    }, [])
+    }, [store])
 
     // Expose methods via ref
     useImperativeHandle(
@@ -213,7 +213,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
           store.instanceApi()?.getConvertPictureUrl(true, type, backgroundColor) ?? '',
         getChart: () => store.instanceApi(),
       }),
-      []
+      [store]
     )
 
     // Initialize chart on mount
@@ -277,6 +277,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
       if (currentSymbol) {
         chart.setSymbol({
           ticker: currentSymbol.ticker,
+          shortName: currentSymbol.shortName ?? currentSymbol.name ?? currentSymbol.ticker,
           pricePrecision: currentSymbol.pricePrecision ?? 2,
           volumePrecision: currentSymbol.volumePrecision ?? 0,
         })
@@ -365,7 +366,7 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
         chart.setPeriod(period)
 
         // Apply timeframe visibility filtering to all overlays
-        const visibilityMap = getAllOverlayTimeframeVisibility()
+        const visibilityMap = store.getAllOverlayTimeframeVisibility()
         if (visibilityMap.size > 0) {
           visibilityMap.forEach((visibility, overlayId) => {
             const shouldBeVisible = isOverlayVisibleForPeriod(visibility, period)
@@ -378,6 +379,9 @@ export const ChartWidget = forwardRef<ChartWidgetRef, ChartWidgetProps>(
       if (prev.symbol?.ticker !== symbol.ticker) {
         chart.setSymbol({
           ticker: symbol.ticker,
+          // Pass shortName through so klinecharts' tooltip title template
+          // `{shortName||ticker} · {period}` prefers the display-friendly name.
+          shortName: symbol.shortName ?? symbol.name ?? symbol.ticker,
           pricePrecision: symbol.pricePrecision ?? 2,
           volumePrecision: symbol.volumePrecision ?? 0,
         })

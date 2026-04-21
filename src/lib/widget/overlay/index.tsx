@@ -11,16 +11,8 @@
 import { useState, useEffect, useSyncExternalStore } from 'react'
 import { Color, Input, Select, Modal, type SelectDataSourceItem } from '../../component'
 import { useChartState } from '../../hooks/useChartState'
-import {
-  popupOverlay,
-  subscribePopupOverlay,
-  setShowOverlaySetting,
-  getOverlayType,
-  getOverlayTimeframeVisibility,
-  setOverlayTimeframeVisibility,
-} from '../../store/overlaySettingStore'
 import { setDefaultForOverlay } from '../../store/overlayDefaultStyles'
-import * as store from '../../store/chartStore'
+import { useChartStore } from '../../store/chartStoreContext'
 import {
   getOverlayPropertySchema,
   klineStylesToOverlayProperties,
@@ -71,7 +63,8 @@ const EXTEND_CAPABLE_OVERLAYS = new Set([
 ])
 
 function OverlaySettingModal() {
-  const overlay = useSyncExternalStore(subscribePopupOverlay, popupOverlay, popupOverlay) as ProOverlay | undefined
+  const store = useChartStore()
+  const overlay = useSyncExternalStore(store.subscribePopupOverlay, store.popupOverlay, store.popupOverlay) as ProOverlay | undefined
   const { modifyOverlayProperties, modifyOverlayFigureStyles, syncOverlay } = useChartState()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('style')
@@ -145,8 +138,8 @@ function OverlaySettingModal() {
       setLocalPoints(points)
     }
 
-    // Initialize timeframe visibility from runtime store
-    const savedVisibility = getOverlayTimeframeVisibility(overlay.id)
+    // Initialize timeframe visibility from per-instance store
+    const savedVisibility = store.getOverlayTimeframeVisibility(overlay.id)
     setLocalVisibility(savedVisibility ?? defaultTimeframeVisibility())
 
     // Initialize extend state from overlay.extendData
@@ -266,8 +259,8 @@ function OverlaySettingModal() {
   const handleVisibilityChange = (visibility: TimeframeVisibility) => {
     if (!overlay) return
     setLocalVisibility(visibility)
-    // Save to runtime store
-    setOverlayTimeframeVisibility(overlay.id, visibility)
+    // Save to per-instance store
+    store.setOverlayTimeframeVisibility(overlay.id, visibility)
     // Persist via syncOverlay
     const chartInstance = store.instanceApi()
     if (chartInstance) {
@@ -310,12 +303,12 @@ function OverlaySettingModal() {
   }
 
   const handleClose = () => {
-    setShowOverlaySetting(false)
+    store.setShowOverlaySetting(false)
   }
 
   return (
     <Modal
-      title={getOverlayType()}
+      title={store.getOverlayType()}
       width={480}
       onClose={handleClose}
       buttons={[
@@ -589,6 +582,7 @@ interface CoordinatesTabProps {
 }
 
 function CoordinatesTab({ localPoints, setLocalPoints, onPointChange }: CoordinatesTabProps) {
+  const store = useChartStore()
   const chartInstance = store.instanceApi()
   const symbol = chartInstance?.getSymbol()
   const pricePrecision = symbol?.pricePrecision ?? 2

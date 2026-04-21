@@ -6,26 +6,20 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import {
-  useOverlaySettings,
-  popupLeft,
-  popupTop,
-  popupOverlay,
-  setShowOverlaySetting,
-} from '../../../store/overlaySettingStore'
+import { useChartStore } from '../../../store/chartStoreContext'
 import { useChartState } from '../../../store/chartStateStore'
 import { Popup as GenericPopup } from '../generic'
 import { Icon } from '../../../widget/icons'
 
 const OverlayOptionsPopup = () => {
+  const store = useChartStore()
   const [hoverKey, setHoverKey] = useState<string | null>(null)
   const [hoverTop, setHoverTop] = useState(0)
   const popupRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const HIDE_DELAY = 200
 
-  const overlay = popupOverlay()
-  const { closePopup } = useOverlaySettings()
+  const overlay = store.popupOverlay()
 
   const cancelHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
@@ -47,8 +41,8 @@ const OverlayOptionsPopup = () => {
   }, [cancelHideTimer])
 
   const close = useCallback(() => {
-    closePopup()
-  }, [closePopup])
+    store.closeOverlayPopup()
+  }, [store])
 
   const onRowHover = (e: React.MouseEvent, key: string) => {
     cancelHideTimer()
@@ -65,7 +59,7 @@ const OverlayOptionsPopup = () => {
 
   const setStyle = (type: 'overlay') => {
     if (type === 'overlay')
-      setShowOverlaySetting(true)
+      store.setShowOverlaySetting(true)
     close()
   }
 
@@ -94,8 +88,8 @@ const OverlayOptionsPopup = () => {
   }
 
   // Calculate submenu position
-  const popupLeftPx = popupLeft() ?? 0
-  const popupTopPx = popupTop() ?? 0
+  const popupLeftPx = store.popupLeft() ?? 0
+  const popupTopPx = store.popupTop() ?? 0
   const popupWidth = popupRef.current?.getBoundingClientRect().width ?? 220
   const subLeft = popupLeftPx + popupWidth + 8
   const subTop = popupTopPx + hoverTop
@@ -205,7 +199,7 @@ const OverlayOptionsPopup = () => {
           return (
             <div
               className="submenu"
-              style={{ position: 'fixed', left: `${subLeft}px`, top: `${subTop}px` }}
+              style={{ position: 'absolute', left: `${subLeft}px`, top: `${subTop}px` }}
               onMouseEnter={cancelHideTimer}
               onMouseLeave={onRowLeave}
             >

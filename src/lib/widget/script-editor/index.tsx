@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from 'react'
 import i18n from '../../i18n'
-import * as store from '../../store/chartStore'
+import { useChartStore } from '../../store/chartStoreContext'
 import { log } from '../../utils/log'
 import type { ScriptLanguageDefinition, ScriptDiagnostic } from '../../types/script'
 import { defaultScriptLanguage } from './defaultLanguage'
@@ -80,6 +80,7 @@ export function ScriptEditor({
   readOnly: initialReadOnly = false,
   onCloneAndEdit,
 }: ScriptEditorProps) {
+  const store = useChartStore()
   const theme = useStoreValue(store.theme, store.subscribeTheme)
 
   const [code, setCode] = useState(initialCode ?? DEFAULT_CODE)
@@ -272,7 +273,7 @@ export function ScriptEditor({
             )
             extensions.push(...langExts)
           } catch (error) {
-            log('[ScriptEditor] Language adapter import failed — continue without syntax highlighting', error)
+            log(store.debug, '[ScriptEditor] Language adapter import failed — continue without syntax highlighting', error)
           }
         }
 

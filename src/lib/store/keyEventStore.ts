@@ -5,14 +5,7 @@
  */
 
 import type { Chart } from 'klinecharts'
-import {
-  instanceApi,
-  theme,
-  fullScreen,
-  rootElementId,
-  setScreenshotUrl,
-} from './chartStore'
-import { showOverlaySetting } from './overlaySettingStore'
+import type { ChartStore } from './chartStore'
 
 // Simple observable store implementation
 type Listener<T> = (value: T) => void
@@ -57,6 +50,8 @@ export interface ModalCallbacks {
   screenshotUrl: () => string
   periodModalVisible: () => boolean
   setPeriodModalVisible: (visible: boolean | ((prev: boolean) => boolean)) => void
+  /** Per-instance overlay-setting panel visibility getter (replaces the old module-level import) */
+  showOverlaySetting: () => boolean
   orderModalVisible?: () => boolean
   setOrderPanelVisible?: (visible: boolean | ((prev: boolean) => boolean)) => void
   orderPanelVisible?: () => boolean
@@ -83,6 +78,7 @@ const allModalHidden = (except: 'settings' | 'indi' | 'screenshot' | 'order' | '
     settingModalVisible,
     screenshotUrl,
     periodModalVisible,
+    showOverlaySetting,
     orderModalVisible,
   } = modalCallbacks
 
@@ -112,20 +108,20 @@ const allModalHidden = (except: 'settings' | 'indi' | 'screenshot' | 'order' | '
 /**
  * Take a screenshot of the chart
  */
-const takeScreenshot = (): void => {
-  const chart = instanceApi()
+const takeScreenshot = (store: ChartStore): void => {
+  const chart = store.instanceApi()
   if (!chart) return
 
-  const url = chart.getConvertPictureUrl(true, 'jpeg', theme() === 'dark' ? '#151517' : '#ffffff')
-  setScreenshotUrl(url)
+  const url = chart.getConvertPictureUrl(true, 'jpeg', store.theme() === 'dark' ? '#151517' : '#ffffff')
+  store.setScreenshotUrl(url)
 }
 
 /**
  * Toggle fullscreen mode
  */
-const toggleFullscreen = (): void => {
-  if (!fullScreen()) {
-    const el = document.querySelector(`#${rootElementId()}`)
+const toggleFullscreen = (store: ChartStore): void => {
+  if (!store.fullScreen()) {
+    const el = document.querySelector(`#${store.rootElementId()}`)
     if (el) {
       const enterFullScreen =
         (el as HTMLElement & { requestFullscreen?: () => Promise<void>; webkitRequestFullscreen?: () => Promise<void>; mozRequestFullScreen?: () => Promise<void>; msRequestFullscreen?: () => Promise<void> }).requestFullscreen ??
@@ -159,14 +155,14 @@ const toggleFullscreen = (): void => {
 /**
  * Document resize handler for key events (triggers chart resize)
  */
-const resizeChart = (): void => {
-  instanceApi()?.resize()
+const resizeChart = (store: ChartStore): void => {
+  store.instanceApi()?.resize()
 }
 
 /**
  * Hook-like function for key event handling
  */
-export const useKeyEvents = () => {
+export const useKeyEvents = (store: ChartStore) => {
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault()
@@ -182,7 +178,7 @@ export const useKeyEvents = () => {
           // Toggle order list
           if (modalCallbacks?.setOrderPanelVisible && modalCallbacks?.orderPanelVisible) {
             modalCallbacks.setOrderPanelVisible(!modalCallbacks.orderPanelVisible())
-            resizeChart()
+            resizeChart(store)
           }
           break
         case 'i':
@@ -209,11 +205,11 @@ export const useKeyEvents = () => {
           break
         case 'p':
           if (allModalHidden('screenshot')) {
-            takeScreenshot()
+            takeScreenshot(store)
           }
           break
         case 'f':
-          toggleFullscreen()
+          toggleFullscreen(store)
           break
         case 'Backspace':
           break
@@ -233,7 +229,7 @@ export const useKeyEvents = () => {
     } else if (event.key === 'ArrowUp') {
       // Arrow up reserved
     } else if (event.key === 'Delete') {
-      instanceApi()?.removeOverlay()
+      store.instanceApi()?.removeOverlay()
     } else if (event.key === 'Escape') {
       // Hide all modals
       modalCallbacks?.setPeriodModalVisible(false)
@@ -241,7 +237,7 @@ export const useKeyEvents = () => {
       modalCallbacks?.setSettingModalVisible(false)
       modalCallbacks?.setOrderPanelVisible?.(false)
       modalCallbacks?.setIndicatorModalVisible(false)
-      setScreenshotUrl('')
+      store.setScreenshotUrl('')
     }
   }
 

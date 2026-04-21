@@ -2,7 +2,7 @@
  * DataLoader Bridge - Creates a klinecharts DataLoader from a TradingView-style Datafeed
  *
  * Usage:
- *   const loader = createDataLoader(myTVDatafeed)
+ *   const loader = createDataLoader(myTVDatafeed, store)
  *   const chart = new Superchart({ dataLoader: loader, ... })
  */
 
@@ -15,7 +15,7 @@ import type {
   SearchSymbolResult,
 } from '../types/datafeed'
 import { periodToResolution } from '../types/datafeed'
-import * as store from '../store/chartStore'
+import type { ChartStore } from '../store/chartStore'
 
 /** Default number of bars to request per page */
 const DEFAULT_COUNT_BACK = 500
@@ -119,11 +119,12 @@ function barToKLineData(bar: Bar): KLineData {
  * Create a klinecharts DataLoader from a TradingView-compatible Datafeed.
  *
  * @param datafeed - A TradingView-compatible Datafeed implementation
+ * @param store - The per-instance ChartStore (used to set loadingVisible)
  * @returns A klinecharts DataLoader with an additional searchSymbols method
  *
  * @example
  * ```typescript
- * const dataLoader = createDataLoader(myDatafeed)
+ * const dataLoader = createDataLoader(myDatafeed, store)
  * const chart = new Superchart({
  *   container: '#chart',
  *   dataLoader,
@@ -132,7 +133,7 @@ function barToKLineData(bar: Bar): KLineData {
  * })
  * ```
  */
-export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
+export function createDataLoader(datafeed: Datafeed, store?: ChartStore): SuperchartDataLoader {
   // Cache resolved symbols to avoid redundant calls
   const symbolCache = new Map<string, LibrarySymbolInfo>()
 
@@ -192,7 +193,7 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
       }
 
       // init or backward — fetch historical data
-      store.setLoadingVisible(true)
+      store?.setLoadingVisible(true)
 
       try {
         const symbolInfo = await resolveSymbol(symbol.ticker)
@@ -231,18 +232,18 @@ export function createDataLoader(datafeed: Datafeed): SuperchartDataLoader {
               barsLoadedRef.callback(fromMs)
             }
 
-            store.setLoadingVisible(false)
+            store?.setLoadingVisible(false)
           },
           (error) => {
             console.error('DataLoader getBars error:', error)
             callback([], { backward: false })
-            store.setLoadingVisible(false)
+            store?.setLoadingVisible(false)
           }
         )
       } catch (error) {
         console.error('DataLoader resolveSymbol error:', error)
         callback([], { backward: false })
-        store.setLoadingVisible(false)
+        store?.setLoadingVisible(false)
       }
     },
 

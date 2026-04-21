@@ -102,7 +102,9 @@
 	}
 
 	.submenu {
-		position: fixed;
+		// Absolute within the popup backdrop (now absolute within .superchart).
+		// Keeps the submenu scoped to this chart instance.
+		position: absolute;
 		min-width: 180px;
 		background: var(--superchart-popover-background-color);
 		border-radius: 6px;

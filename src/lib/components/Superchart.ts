@@ -28,7 +28,7 @@ import type { ScriptProvider } from '../types/script'
 import type { OverlayProperties } from '../types/overlay'
 import type { UseBackendIndicatorsReturn } from '../hooks/useBackendIndicators'
 import type { PaneProperties } from '../store/chartStore'
-import * as store from '../store/chartStore'
+import { createChartStore, type ChartStore } from '../store/chartStore'
 
 // ---- Toolbar types ----
 
@@ -279,6 +279,7 @@ export interface SuperchartApi {
  * ```
  */
 export default class Superchart implements SuperchartApi {
+  private _store: ChartStore
   private _container: Nullable<HTMLElement> = null
   private _root: Nullable<Root> = null
   private _api: Nullable<SuperchartApi> = null
@@ -307,6 +308,9 @@ export default class Superchart implements SuperchartApi {
   private _initialized = false
 
   constructor(options: SuperchartOptions) {
+    // Create an isolated store for this instance
+    this._store = createChartStore()
+
     // Resolve container
     if (utils.isString(options.container)) {
       this._container = document.getElementById(options.container as string)
@@ -324,28 +328,28 @@ export default class Superchart implements SuperchartApi {
     this._container.setAttribute('data-theme', options.theme ?? 'light')
 
     // Initialize store with options
-    store.setSymbol(options.symbol)
-    store.setPeriod(options.period)
-    store.setTheme(options.theme ?? 'light')
-    store.setLocale(options.locale ?? 'en-US')
-    store.setTimezone(options.timezone ?? 'Etc/UTC')
-    store.setMainIndicators(options.mainIndicators ?? [])
-    store.setDrawingBarVisible(options.drawingBarVisible ?? false)
-    store.setPeriodBarVisible(options.periodBarVisible ?? true)
+    this._store.setSymbol(options.symbol)
+    this._store.setPeriod(options.period)
+    this._store.setTheme(options.theme ?? 'light')
+    this._store.setLocale(options.locale ?? 'en-US')
+    this._store.setTimezone(options.timezone ?? 'Etc/UTC')
+    this._store.setMainIndicators(options.mainIndicators ?? [])
+    this._store.setDrawingBarVisible(options.drawingBarVisible ?? false)
+    this._store.setPeriodBarVisible(options.periodBarVisible ?? true)
 
-    store.setDebug(options.debug ?? true)
+    this._store.setDebug(options.debug ?? true)
 
     if (options.storageAdapter) {
-      store.setStorageAdapter(options.storageAdapter)
+      this._store.setStorageAdapter(options.storageAdapter)
     }
-    store.setStorageKey(options.storageKey ?? options.symbol.ticker)
+    this._store.setStorageKey(options.storageKey ?? options.symbol.ticker)
 
     if (options.indicatorProvider) {
-      store.setIndicatorProvider(options.indicatorProvider)
+      this._store.setIndicatorProvider(options.indicatorProvider)
     }
 
     if (options.scriptProvider) {
-      store.setScriptProvider(options.scriptProvider)
+      this._store.setScriptProvider(options.scriptProvider)
     }
 
     if (options.subIndicators) {
@@ -353,16 +357,17 @@ export default class Superchart implements SuperchartApi {
       options.subIndicators.forEach((name) => {
         subIndicatorsRecord[name] = ''
       })
-      store.setSubIndicators(subIndicatorsRecord)
+      this._store.setSubIndicators(subIndicatorsRecord)
     }
 
     // Root element ID for portals
-    store.setRootElementId(this._container.id ?? '')
+    this._store.setRootElementId(this._container.id ?? '')
 
     // Render React component
     this._root = createRoot(this._container)
     this._root.render(
       createElement(SuperchartComponent, {
+        store: this._store,
         onApiReady: (api: SuperchartApi) => {
           this._api = api
           // Replay any createButton / createDropdown calls made before React was ready
@@ -487,12 +492,12 @@ export default class Superchart implements SuperchartApi {
             // Registered here (not in the constructor tail) so they're re-added
             // on every strict-mode/HMR re-invocation of onApiReady after the
             // _unsubscribers cleanup above.
-            this._unsubscribers.push(store.subscribeSymbol((sym) => {
+            this._unsubscribers.push(this._store.subscribeSymbol((sym) => {
               if (!this._initialized || sym == null) return
               this._listeners.symbolChange.forEach(cb => cb(sym))
             }))
 
-            this._unsubscribers.push(store.subscribePeriod((p) => {
+            this._unsubscribers.push(this._store.subscribePeriod((p) => {
               if (!this._initialized || p == null) return
               this._listeners.periodChange.forEach(cb => cb(p as Period))
             }))
@@ -532,7 +537,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   getTheme(): string {
-    return this._api?.getTheme() ?? store.theme()
+    return this._api?.getTheme() ?? this._store.theme()
   }
 
   setStyles(styles: DeepPartial<PaneProperties>): void {
@@ -548,7 +553,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   getLocale(): string {
-    return this._api?.getLocale() ?? store.locale()
+    return this._api?.getLocale() ?? this._store.locale()
   }
 
   setTimezone(timezone: string): void {
@@ -556,7 +561,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   getTimezone(): string {
-    return this._api?.getTimezone() ?? store.timezone()
+    return this._api?.getTimezone() ?? this._store.timezone()
   }
 
   setSymbol(symbol: SymbolInfo): void {
@@ -564,7 +569,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   getSymbol(): SymbolInfo {
-    return this._api?.getSymbol() ?? store.symbol()!
+    return this._api?.getSymbol() ?? this._store.symbol()!
   }
 
   setPeriod(period: Period): void {
@@ -572,11 +577,11 @@ export default class Superchart implements SuperchartApi {
   }
 
   getPeriod(): Period {
-    return this._api?.getPeriod() ?? store.period()!
+    return this._api?.getPeriod() ?? this._store.period()!
   }
 
   getChart(): Nullable<Chart> {
-    return this._api?.getChart() ?? store.instanceApi()
+    return this._api?.getChart() ?? this._store.instanceApi()
   }
 
   /**
@@ -624,11 +629,11 @@ export default class Superchart implements SuperchartApi {
 
     const unsub = chart.getReplayEngine().onReplayError(() => {
       const ep = chart.getPeriod()
-      const sp = store.period()
+      const sp = this._store.period()
       if (ep !== null && sp !== null && (sp.type !== ep.type || sp.span !== ep.span)) {
         const textMap: Record<string, string> = { second: 's', minute: 'm', hour: 'H', day: 'D', week: 'W', month: 'M' }
         const text = `${ep.span}${textMap[ep.type] ?? ep.type}`
-        store.setPeriod({ type: ep.type, span: ep.span, text } as Period)
+        this._store.setPeriod({ type: ep.type, span: ep.span, text } as Period)
       }
     })
     this._unsubscribers.push(unsub)
@@ -753,12 +758,12 @@ export default class Superchart implements SuperchartApi {
     this._replayErrorSyncDone = false
 
     // Dispose providers before unmounting
-    const provider = store.indicatorProvider()
+    const provider = this._store.indicatorProvider()
     if (provider?.dispose) {
       provider.dispose()
     }
 
-    const scriptProv = store.scriptProvider()
+    const scriptProv = this._store.scriptProvider()
     if (scriptProv?.dispose) {
       scriptProv.dispose()
     }
@@ -775,8 +780,8 @@ export default class Superchart implements SuperchartApi {
       this._container = null
     }
 
-    // Reset store
-    store.resetStore()
+    // Reset store (only affects this instance's store)
+    this._store.resetStore()
 
     this._api = null
     this._pendingToolbarCalls = []

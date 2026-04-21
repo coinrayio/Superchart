@@ -31,9 +31,6 @@ export function Popup({
 }: PopupProps) {
   if (!open) return null
 
-  const vpW = typeof window !== 'undefined' ? window.innerWidth : 1024
-  const vpH = typeof window !== 'undefined' ? window.innerHeight : 768
-
   const styleObj: CSSProperties = {
     ...(style ?? {}),
     position: 'absolute',
@@ -58,29 +55,39 @@ export function Popup({
       : 'translateX(-50%)'
   }
 
-  // After mount, measure the popup and shift it so it stays within the viewport
+  // After mount, measure the popup and shift it so it stays within the
+  // chart container (the nearest positioned ancestor — `.superchart`),
+  // not the viewport. This keeps the popup scoped to its own Superchart
+  // instance when multiple charts are rendered on the same page.
   const popupRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
+    const parent = (node.offsetParent as HTMLElement) ?? node.parentElement
     const rect = node.getBoundingClientRect()
+    const parentRect = parent?.getBoundingClientRect() ?? {
+      top: 0,
+      left: 0,
+      right: typeof window !== 'undefined' ? window.innerWidth : 1024,
+      bottom: typeof window !== 'undefined' ? window.innerHeight : 768,
+    } as DOMRect
     // Vertical: shift up if overflowing bottom, down if above top
     if (typeof top === 'number') {
-      const overflowBottom = rect.bottom - (vpH - MARGIN)
+      const overflowBottom = rect.bottom - (parentRect.bottom - MARGIN)
       if (overflowBottom > 0) {
         node.style.top = `${Math.max(MARGIN, top - overflowBottom)}px`
-      } else if (rect.top < MARGIN) {
+      } else if (rect.top < parentRect.top + MARGIN) {
         node.style.top = `${MARGIN}px`
       }
     }
     // Horizontal: shift left if overflowing right, right if past left edge
     if (typeof left === 'number') {
-      const overflowRight = rect.right - (vpW - MARGIN)
+      const overflowRight = rect.right - (parentRect.right - MARGIN)
       if (overflowRight > 0) {
         node.style.left = `${Math.max(MARGIN, left - overflowRight)}px`
-      } else if (rect.left < MARGIN) {
+      } else if (rect.left < parentRect.left + MARGIN) {
         node.style.left = `${MARGIN}px`
       }
     }
-  }, [top, left, vpH, vpW])
+  }, [top, left])
 
   return (
     <div
