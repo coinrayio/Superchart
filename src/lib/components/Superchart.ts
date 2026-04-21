@@ -482,6 +482,20 @@ export default class Superchart implements SuperchartApi {
             }
             chart.subscribeAction('onChartDoubleClick', doubleClickHandler)
             this._unsubscribers.push(() => chart.unsubscribeAction('onChartDoubleClick', doubleClickHandler))
+
+            // Store subscriptions for chart → panel symbol/period sync.
+            // Registered here (not in the constructor tail) so they're re-added
+            // on every strict-mode/HMR re-invocation of onApiReady after the
+            // _unsubscribers cleanup above.
+            this._unsubscribers.push(store.subscribeSymbol((sym) => {
+              if (!this._initialized || sym == null) return
+              this._listeners.symbolChange.forEach(cb => cb(sym))
+            }))
+
+            this._unsubscribers.push(store.subscribePeriod((p) => {
+              if (!this._initialized || p == null) return
+              this._listeners.periodChange.forEach(cb => cb(p as Period))
+            }))
           }
         },
         dataLoader: options.dataLoader,
@@ -504,19 +518,10 @@ export default class Superchart implements SuperchartApi {
     if (options.onDoubleSelect) this._listeners.doubleSelect.add(options.onDoubleSelect)
     if (options.onReady) this._readyCallbacks.push(options.onReady)
 
-    // Subscribe to store signals for symbol/period changes
-    // Set _initialized after store init so initial values don't fire callbacks
+    // Set _initialized after store init so initial values don't fire callbacks.
+    // The actual store.subscribeSymbol / subscribePeriod wiring lives in
+    // onApiReady so it survives strict-mode/HMR re-invocations.
     this._initialized = true
-
-    this._unsubscribers.push(store.subscribeSymbol((sym) => {
-      if (!this._initialized || sym == null) return
-      this._listeners.symbolChange.forEach(cb => cb(sym))
-    }))
-
-    this._unsubscribers.push(store.subscribePeriod((p) => {
-      if (!this._initialized || p == null) return
-      this._listeners.periodChange.forEach(cb => cb(p as Period))
-    }))
   }
 
   // Proxy methods to internal API
