@@ -12,7 +12,7 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { registerIndicator } from 'klinecharts'
 import type { KLineData, IndicatorFigure } from 'klinecharts'
-import * as store from '../store/chartStore'
+import { useChartStore } from '../store/chartStoreContext'
 import type {
   IndicatorDefinition,
   IndicatorSubscription,
@@ -183,6 +183,7 @@ export interface UseBackendIndicatorsReturn {
  * Hook for managing backend indicator subscriptions and data flow
  */
 export function useBackendIndicators(): UseBackendIndicatorsReturn {
+  const store = useChartStore()
   // Active indicator subscriptions keyed by indicator name
   const activeRef = useRef<Map<string, ActiveIndicator>>(new Map())
   const subscriptionsRef = useRef<Map<string, IndicatorSubscription>>(new Map())

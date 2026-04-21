@@ -17,21 +17,26 @@ import type {
   IndicatorTooltipData,
   TooltipFeatureStyle,
 } from 'klinecharts'
-import * as store from '../store/chartStore'
+import { useChartStore } from '../store/chartStoreContext'
 import type { ChartState, SavedIndicator } from '../types/storage'
 import type { SavedOverlay, OverlayProperties, ProOverlay } from '../types/overlay'
 import { isOverlayVisibleForPeriod } from '../types/overlay'
 import { createEmptyChartState } from '../types/storage'
 import { ctrlKeyedDown } from '../store/keyEventStore'
-import { useOverlaySettings, setPopupOverlay, setShowOverlaySetting, getOverlayTimeframeVisibility, setOverlayTimeframeVisibility, getAllOverlayTimeframeVisibility } from '../store/overlaySettingStore'
-import type { OverlayType } from '../store/overlaySettingStore'
+import type { OverlayType } from '../store/chartStore'
 import { getDefaultForOverlay, setDefaultForOverlay, setOverlayDefaults } from '../store/overlayDefaultStyles'
 import { overlayPropertiesToKlineStyles } from '../widget/overlay/overlayPropertySchemas'
 
 /**
  * Convert Overlay to SavedOverlay format
+ * `getVisibility` is the per-instance visibility lookup from ChartStore.
  */
-function overlayToSaved(overlay: Overlay, properties?: DeepPartial<OverlayProperties>, figureStyles?: Record<string, Record<string, unknown>>): SavedOverlay {
+function overlayToSaved(
+  overlay: Overlay,
+  getVisibility: (id: string) => import('../types/overlay').TimeframeVisibility | undefined,
+  properties?: DeepPartial<OverlayProperties>,
+  figureStyles?: Record<string, Record<string, unknown>>
+): SavedOverlay {
   const saved: SavedOverlay = {
     id: overlay.id,
     name: overlay.name,
@@ -49,7 +54,7 @@ function overlayToSaved(overlay: Overlay, properties?: DeepPartial<OverlayProper
     extendData: overlay.extendData,
   }
   // Persist timeframe visibility if configured
-  const tfVisibility = getOverlayTimeframeVisibility(overlay.id)
+  const tfVisibility = getVisibility(overlay.id)
   if (tfVisibility && !tfVisibility.showOnAll) {
     saved.timeframeVisibility = tfVisibility
   }
@@ -87,6 +92,7 @@ export interface UseChartStateOptions {
  * Hook for managing chart state persistence
  */
 export function useChartState(options: UseChartStateOptions = {}) {
+  const store = useChartStore()
   // Cache for current state to avoid excessive storage reads
   const stateCache = useRef<ChartState | null>(null)
 
@@ -154,7 +160,7 @@ export function useChartState(options: UseChartStateOptions = {}) {
   const syncOverlay = useCallback(
     async (overlay: Overlay, properties?: DeepPartial<OverlayProperties>): Promise<void> => {
       const state = await loadState()
-      const saved = overlayToSaved(overlay, properties)
+      const saved = overlayToSaved(overlay, store.getOverlayTimeframeVisibility, properties)
 
       const existingIndex = state.overlays.findIndex((o) => o.id === overlay.id)
 
@@ -280,14 +286,19 @@ export function useChartState(options: UseChartStateOptions = {}) {
           popOverlay(event.overlay.id)
           return true
         }
-        useOverlaySettings().openPopup(event, { overlayType: event.overlay.name as OverlayType })
+        store.openOverlayPopup(
+          event.pageX ?? 0,
+          event.pageY ?? 0,
+          event.overlay,
+          { overlayType: event.overlay.name as OverlayType }
+        )
         return true
       }
 
       // Default double-click handler: opens overlay settings modal
       const handleDoubleClick = (event: OverlayEvent<unknown>): boolean => {
-        setPopupOverlay(event.overlay as ProOverlay)
-        setShowOverlaySetting(true)
+        store.setPopupOverlay(event.overlay as ProOverlay)
+        store.setShowOverlaySetting(true)
         return true
       }
 
@@ -556,16 +567,16 @@ export function useChartState(options: UseChartStateOptions = {}) {
         if (id && overlay.figureStyles && Object.keys(overlay.figureStyles).length > 0) {
           chartInstance.overrideOverlay({ id, figureStyles: overlay.figureStyles })
         }
-        // Restore timeframe visibility to runtime store
+        // Restore timeframe visibility to per-instance store
         if (id && overlay.timeframeVisibility) {
-          setOverlayTimeframeVisibility(id, overlay.timeframeVisibility)
+          store.setOverlayTimeframeVisibility(id, overlay.timeframeVisibility)
         }
       }
 
       // Apply timeframe visibility filtering for the current period
       const currentPeriod = store.period()
       if (currentPeriod) {
-        const visibilityMap = getAllOverlayTimeframeVisibility()
+        const visibilityMap = store.getAllOverlayTimeframeVisibility()
         visibilityMap.forEach((visibility, overlayId) => {
           const shouldBeVisible = isOverlayVisibleForPeriod(visibility, currentPeriod)
           chartInstance.overrideOverlay({ id: overlayId, visible: shouldBeVisible })

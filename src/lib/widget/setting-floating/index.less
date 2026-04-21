@@ -1,5 +1,7 @@
 .cr-setting-floating {
-  position: fixed;
+  // position is set inline (absolute, relative to .superchart container).
+  // Scoping to the container prevents the popup from drifting onto another
+  // Superchart instance when multiple charts are rendered on the same page.
   z-index: 9999;
   pointer-events: auto;
   user-select: none;

@@ -30,9 +30,13 @@ function useSuperchart(containerRef: React.RefObject<HTMLDivElement | null>, sym
     const datafeed = new CoinrayDatafeed(TOKEN)
     const dataLoader = createDataLoader(datafeed)
 
+    // Extract display name from coinray ticker format (EXCHANGE_BASE_QUOTE → BASE/QUOTE)
+    const parts = symbol.split("_")
+    const shortName = parts.length >= 3 ? `${parts[2]}/${parts[1]}` : symbol
+
     const superchart = new Superchart({
       container: containerRef.current,
-      symbol: {ticker: symbol, pricePrecision: 2, volumePrecision: 0},
+      symbol: {ticker: symbol, shortName, pricePrecision: 2, volumePrecision: 0},
       period: {type: "hour", span: 1, text: "1H"},
       dataLoader,
       theme: "dark",

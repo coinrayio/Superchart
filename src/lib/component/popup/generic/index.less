@@ -1,12 +1,12 @@
 @import (reference) '../../../base.less';
 
 .@{prefix-cls}-popup_background {
-  position: fixed;
-  width: 100%;
-  height: 100%;
+  // Absolute within the nearest positioned ancestor (.superchart container),
+  // not fixed to the viewport — so popups from one chart instance stay inside
+  // that chart and don't drift across other charts on the same page.
+  position: absolute;
+  inset: 0;
   background-color: transparent;
-  left: 0;
-  top: 0;
   z-index: 99;
 
   .popup {

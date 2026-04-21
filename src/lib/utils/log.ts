@@ -1,6 +1,15 @@
-import { debug } from '../store/chartStore'
-
-/** Debug log — only prints when `debug: true` is set in SuperchartOptions */
-export function log(...args: unknown[]): void {
-  if (debug()) console.log(...args)
+/**
+ * Debug logger — only prints when the debug flag is true.
+ *
+ * Pass the getter from the per-instance ChartStore:
+ *   import { log } from '../utils/log'
+ *   const store = useChartStore()
+ *   log(store.debug, 'message', ...)
+ *
+ * The first argument is the debug getter (or a boolean), remaining args are
+ * forwarded to console.log.
+ */
+export function log(debugGetter: (() => boolean) | boolean, ...args: unknown[]): void {
+  const isDebug = typeof debugGetter === 'function' ? debugGetter() : debugGetter
+  if (isDebug) console.log(...args)
 }
