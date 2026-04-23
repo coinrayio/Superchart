@@ -13,6 +13,23 @@
   height: 100%;
   width: 100%;
 
+  // Prevent browser-native touch behaviors that interfere with chart gestures:
+  //   - touch-callout: suppresses iOS Safari's long-press callout menu
+  //   - user-select: suppresses the text-selection callout on Android/iOS
+  // Canvas content has no selectable text, so disabling these is a net win
+  // and lets our long-press → onRightSelect / overlay onRightClick handlers
+  // run without the browser's default context menu appearing.
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+
+  // Re-enable selection for form inputs and code editors so users can still
+  // type, select, and copy/paste in search bars, script editor, etc.
+  input, textarea, [contenteditable], .monaco-editor, .cm-editor {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   &[data-pane-background-type="gradient"] {
     height: @widget-height;
   }
