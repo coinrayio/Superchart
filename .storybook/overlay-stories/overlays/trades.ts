@@ -1,4 +1,4 @@
-import type {Chart, Nullable, TradeLine, TradeLineProperties} from "@superchart/index"
+import type {Chart, Nullable, OverlayEvent, TradeLine} from "@superchart/index"
 import {createTradeLine} from "@superchart/index"
 
 export interface Trade {
@@ -17,6 +17,7 @@ export interface TradeOptions {
   textGap?: number
   gap?: number
   showLabelArrow?: boolean
+  onRightClick?: (event: OverlayEvent<unknown>) => void
 }
 
 export function createTrade(
@@ -25,7 +26,8 @@ export function createTrade(
   options?: TradeOptions,
 ): Nullable<TradeLine> {
   const direction = trade.side === "buy" ? "up" : "down" as const
-  const props: Partial<TradeLineProperties> = {
+
+  return createTradeLine(chart, {
     direction,
     arrowType: options?.arrowType ?? "wide",
     color: options?.color,
@@ -37,9 +39,8 @@ export function createTrade(
     showLabelArrow: options?.showLabelArrow,
     timestamp: trade.time * 1000,
     price: trade.price,
-  }
-
-  return createTradeLine(chart, props)
+    onRightClick: options?.onRightClick,
+  })
 }
 
 export function removeTrade(chart: Chart, id: string): void {

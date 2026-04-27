@@ -80,7 +80,7 @@ export type { OrderLine, OrderLineProperties, OrderLineStyle, OrderLineEventList
 export type { PriceLine, PriceLineProperties, PriceLineEventListener } from 'klinecharts'
 
 // Trade line types (from coinray-chart)
-export type { TradeLine, TradeLineProperties } from 'klinecharts'
+export type { TradeLine, TradeLineProperties, TradeLineOptions } from 'klinecharts'
 
 // Datafeed types
 export type {

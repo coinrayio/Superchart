@@ -76,7 +76,10 @@ function TradesDemo({arrowType, numTrades, spacingHours, showAmount, showPrice, 
         const tradeLine = createTrade(
           chart,
           {time: match.timestamp / 1000, price, side, amount},
-          {arrowType, color, textColor: labelColor, text: label, textFontSize, textGap, gap, showLabelArrow},
+          {
+            arrowType, color, textColor: labelColor, text: label, textFontSize, textGap, gap, showLabelArrow,
+            onRightClick: (event) => console.log("trade right-click", event),
+          },
         )
         if (tradeLine) {
           tradesRef.current.push({tradeLine, side, amount, price})
