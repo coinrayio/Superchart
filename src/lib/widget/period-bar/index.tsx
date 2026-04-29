@@ -5,7 +5,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { isString } from 'lodash'
 import i18n from '../../i18n'
-import { getScreenSize } from '../../helpers'
 
 import type { SymbolInfo as ChartSymbolInfo, Period as ChartPeriod } from '../../types/chart'
 
@@ -61,7 +60,6 @@ export function PeriodBar({
   const customRightRef = useRef<HTMLDivElement>(null)
   const [showPeriodList, setShowPeriodList] = useState(false)
   const [overflow, setOverflow] = useState(true)
-  const [periodPopupLeft, setPeriodPopupLeft] = useState(0)
   const [fullScreen, setFullScreen] = useState(propFullScreen)
 
   const offAllPeriodOverlay = () => {
@@ -150,14 +148,9 @@ export function PeriodBar({
       <div className="item tools period_home" data-button="periodPicker">
         <button
           className="item period"
-          onClick={(event) => {
+          onClick={() => {
             if (!showPeriodList) {
               offAllPeriodOverlay()
-              setPeriodPopupLeft(
-                getScreenSize().x - event.pageX! > 200
-                  ? event.pageX!
-                  : getScreenSize().x - 200
-              )
             }
             setOverflow(false)
             setShowPeriodList(!showPeriodList)
@@ -175,7 +168,7 @@ export function PeriodBar({
           >
             <div
               className="period_list"
-              style={{ left: `${periodPopupLeft - 50}px` }}
+              style={{ left: 0 }}
             >
               {periods.map((p, index) => (
                 <li
