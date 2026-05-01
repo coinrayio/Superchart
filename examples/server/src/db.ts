@@ -419,3 +419,131 @@ export function getAllIndicators(): DbIndicator[] {
 export function getIndicatorByName(name: string): DbIndicator | undefined {
   return db.prepare('SELECT * FROM indicators WHERE name = ?').get(name) as DbIndicator | undefined
 }
+
+// ----------------------------------------------------------------------------
+// Chart state — per-key blobs with optimistic-concurrency revision.
+// Mirrors Superchart's StorageAdapter contract; see PERSISTENCE_ROADMAP.md.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chart_state (
+    key        TEXT PRIMARY KEY,
+    state      TEXT NOT NULL,
+    revision   INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    symbol     TEXT,
+    period     TEXT
+  )
+`)
+
+interface ChartStateRow {
+  key: string
+  state: string
+  revision: number
+  updated_at: string
+  symbol: string | null
+  period: string | null
+}
+
+export interface ChartStateRecord {
+  state: unknown
+  revision: number
+}
+
+export interface ChartStateEntry {
+  key: string
+  revision: number
+  savedAt: number
+  symbol?: string
+  period?: string
+}
+
+export function loadChartState(key: string): ChartStateRecord | null {
+  const row = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+    | { state: string; revision: number }
+    | undefined
+  if (!row) return null
+  return { state: JSON.parse(row.state), revision: row.revision }
+}
+
+/**
+ * Save chart state with optional optimistic-concurrency check.
+ *
+ * Returns:
+ *   { ok: true, revision }                     on success
+ *   { ok: false, conflict: true, current }     when expectedRevision is stale
+ */
+export function saveChartState(
+  key: string,
+  state: unknown,
+  expectedRevision: number | undefined,
+  symbol?: string,
+  period?: string
+):
+  | { ok: true; revision: number }
+  | { ok: false; conflict: true; current: ChartStateRecord } {
+  const current = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+    | { state: string; revision: number }
+    | undefined
+  const currentRevision = current?.revision ?? 0
+
+  if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+    return {
+      ok: false,
+      conflict: true,
+      current: {
+        state: current ? JSON.parse(current.state) : state,
+        revision: currentRevision,
+      },
+    }
+  }
+
+  const nextRevision = currentRevision + 1
+  const updatedAt = new Date().toISOString()
+  const stateJson = JSON.stringify(state)
+
+  if (current) {
+    // Affected-row check guards against a concurrent writer that bumped revision
+    // between our SELECT and UPDATE. better-sqlite3 is synchronous so this is
+    // unlikely under normal load, but cheap insurance.
+    const result = db
+      .prepare('UPDATE chart_state SET state = ?, revision = ?, updated_at = ?, symbol = ?, period = ? WHERE key = ? AND revision = ?')
+      .run(stateJson, nextRevision, updatedAt, symbol ?? null, period ?? null, key, currentRevision)
+    if (result.changes !== 1) {
+      // Race: someone else wrote between SELECT and UPDATE. Surface as conflict.
+      const fresh = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+        | { state: string; revision: number }
+      return {
+        ok: false,
+        conflict: true,
+        current: { state: JSON.parse(fresh.state), revision: fresh.revision },
+      }
+    }
+  } else {
+    db.prepare(
+      'INSERT INTO chart_state (key, state, revision, updated_at, symbol, period) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(key, stateJson, nextRevision, updatedAt, symbol ?? null, period ?? null)
+  }
+
+  return { ok: true, revision: nextRevision }
+}
+
+export function deleteChartState(key: string): boolean {
+  const result = db.prepare('DELETE FROM chart_state WHERE key = ?').run(key)
+  return result.changes > 0
+}
+
+export function listChartStates(prefix?: string): ChartStateEntry[] {
+  const rows = (prefix
+    ? db.prepare('SELECT * FROM chart_state WHERE key LIKE ? ORDER BY updated_at DESC').all(`${prefix}%`)
+    : db.prepare('SELECT * FROM chart_state ORDER BY updated_at DESC').all()
+  ) as ChartStateRow[]
+
+  return rows.map((row) => ({
+    key: row.key,
+    revision: row.revision,
+    savedAt: new Date(row.updated_at).getTime(),
+    symbol: row.symbol ?? undefined,
+    period: row.period ?? undefined,
+  }))
+}

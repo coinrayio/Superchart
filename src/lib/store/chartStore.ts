@@ -24,6 +24,14 @@ import { getScreenSize } from '../helpers'
 // Simple observable store implementation
 type Listener<T> = (value: T) => void
 
+/**
+ * Caveat: `set()` interprets any function argument as an updater
+ * `(prev) => next`. If you need to store a callback whose type is itself a
+ * function (e.g. an event handler), wrap it in an object holder before
+ * passing in — see `setOnStorageError` below for the pattern. Otherwise the
+ * setter will invoke your callback at registration time with the previous
+ * value as its argument.
+ */
 function createSignal<T>(initialValue: T): [() => T, (value: T | ((prev: T) => T)) => void, (listener: Listener<T>) => () => void] {
   let value = initialValue
   const listeners = new Set<Listener<T>>()
@@ -156,6 +164,10 @@ export interface ChartStore {
   setStorageKey: (value: string) => void
   subscribeStorageKey: (listener: Listener<string>) => () => void
 
+  /** Optional consumer-supplied error handler for storage failures (e.g. retry exhaustion). */
+  onStorageError: () => Nullable<(err: Error) => void>
+  setOnStorageError: (value: Nullable<(err: Error) => void>) => void
+
   // Backend indicator provider
   indicatorProvider: () => Nullable<IndicatorProvider>
   setIndicatorProvider: (value: Nullable<IndicatorProvider>) => void
@@ -276,6 +288,15 @@ export function createChartStore(): ChartStore {
   const [selectedOverlayPosition, setSelectedOverlayPosition, subscribeSelectedOverlayPosition] = createSignal<{ x: number; y: number }>({ x: 0, y: 0 })
   const [storageAdapter, setStorageAdapter, subscribeStorageAdapter] = createSignal<Nullable<StorageAdapter>>(null)
   const [storageKey, setStorageKey, subscribeStorageKey] = createSignal<string>('')
+  // Wrap the callback in a holder object: createSignal's setter treats raw
+  // function values as state-updaters and invokes them with the previous value,
+  // which would call the consumer's error handler with `null` at registration
+  // time. The wrapper keeps the function opaque to the signal machinery.
+  const [onStorageErrorHolder, setOnStorageErrorHolder] = createSignal<{ fn: Nullable<(err: Error) => void> }>({ fn: null })
+  const onStorageError = () => onStorageErrorHolder().fn
+  const setOnStorageError = (value: Nullable<(err: Error) => void>) => {
+    setOnStorageErrorHolder({ fn: value })
+  }
   const [indicatorProvider, setIndicatorProvider, subscribeIndicatorProvider] = createSignal<Nullable<IndicatorProvider>>(null)
   const [scriptProvider, setScriptProvider, subscribeScriptProvider] = createSignal<Nullable<ScriptProvider>>(null)
   const [chartModified, setChartModified, subscribeChartModified] = createSignal<boolean>(false)
@@ -382,6 +403,7 @@ export function createChartStore(): ChartStore {
     selectedOverlayPosition, setSelectedOverlayPosition, subscribeSelectedOverlayPosition,
     storageAdapter, setStorageAdapter, subscribeStorageAdapter,
     storageKey, setStorageKey, subscribeStorageKey,
+    onStorageError, setOnStorageError,
     indicatorProvider, setIndicatorProvider, subscribeIndicatorProvider,
     scriptProvider, setScriptProvider, subscribeScriptProvider,
     chartModified, setChartModified, subscribeChartModified,

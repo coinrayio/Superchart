@@ -120,6 +120,12 @@ export interface SuperchartOptions {
   storageAdapter?: StorageAdapter
   /** Storage key for this chart (default: symbol.ticker) */
   storageKey?: string
+  /**
+   * Called when a storage save fails after the merge-retry loop has been
+   * exhausted (default 3 attempts) or when a non-conflict adapter error is
+   * thrown. Use to surface persistence errors in your UI.
+   */
+  onStorageError?: (err: Error) => void
 
   // Optional - Initial state
   /** Initial main indicators (on candle pane) */
@@ -343,6 +349,9 @@ export default class Superchart implements SuperchartApi {
       this._store.setStorageAdapter(options.storageAdapter)
     }
     this._store.setStorageKey(options.storageKey ?? options.symbol.ticker)
+    if (options.onStorageError) {
+      this._store.setOnStorageError(options.onStorageError)
+    }
 
     if (options.indicatorProvider) {
       this._store.setIndicatorProvider(options.indicatorProvider)

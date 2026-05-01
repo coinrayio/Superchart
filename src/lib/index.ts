@@ -67,7 +67,28 @@ export type {
   ToolbarDropdownSeparator,
 } from './components/Superchart'
 export type { Period, SymbolInfo, ProChart } from './types/chart'
-export type { StorageAdapter, ChartState } from './types/storage'
+export type {
+  StorageAdapter,
+  ChartState,
+  StorageRecord,
+  StorageWriteResult,
+  StorageEntry,
+  SavedIndicator,
+  ChartPreferences,
+} from './types/storage'
+export {
+  StorageConflictError,
+  CHART_STATE_VERSION,
+  createEmptyChartState,
+  migrateChartState,
+  mergeChartStates,
+} from './types/storage'
+
+// Storage adapter reference implementations
+export { LocalStorageAdapter } from './storage/localStorage'
+export type { LocalStorageAdapterOptions } from './storage/localStorage'
+export { HttpStorageAdapter } from './storage/http'
+export type { HttpStorageAdapterOptions } from './storage/http'
 export type { IndicatorProvider, IndicatorDefinition } from './types/indicator'
 export type { UseBackendIndicatorsReturn } from './hooks/useBackendIndicators'
 export type { OverlayProperties, ProOverlay, ProOverlayCreate, ProOverlayTemplate } from './types/overlay'

@@ -6,6 +6,12 @@
  * - REST API for server-side storage
  * - IndexedDB for large datasets
  * - etc.
+ *
+ * Two reference implementations ship with Superchart:
+ * - `LocalStorageAdapter` (`superchart/storage`) — single-device, browser-only
+ * - `HttpStorageAdapter` (`superchart/storage`) — talks to a REST backend
+ *
+ * @see PERSISTENCE_ROADMAP.md
  */
 
 import type { DeepPartial, Styles, PaneOptions, OverlayProperties } from 'klinecharts'
@@ -13,63 +19,131 @@ import type { PaneLayout } from './chart'
 import type { SavedOverlay } from './overlay'
 
 /**
+ * Result of `StorageAdapter.load`: the saved state plus an opaque
+ * monotonically-increasing `revision` used for optimistic concurrency.
+ *
+ * `revision` is **distinct from** `ChartState.version` — `revision` tracks
+ * write-order on a per-key basis (multi-device conflicts), `version` tracks
+ * the schema migration generation.
+ */
+export interface StorageRecord {
+  state: ChartState
+  revision: number
+}
+
+/**
+ * Result of `StorageAdapter.save` — the new revision after write.
+ */
+export interface StorageWriteResult {
+  revision: number
+}
+
+/**
+ * Optional metadata returned by `StorageAdapter.list` for each saved key.
+ * Adapters that can't cheaply provide some fields may omit them.
+ */
+export interface StorageEntry {
+  key: string
+  revision: number
+  savedAt?: number
+  symbol?: string
+  period?: string
+}
+
+/**
+ * Thrown by `StorageAdapter.save` when `expectedRevision` is supplied and
+ * doesn't match the adapter's current revision for that key. Carries the
+ * remote state so the caller can merge and retry.
+ *
+ * `useChartState` catches this internally and runs an array-merge-and-retry
+ * loop; consumers only see this surface in their `onStorageError` callback
+ * if the retries are exhausted.
+ */
+export class StorageConflictError extends Error {
+  remoteState: ChartState
+  remoteRevision: number
+
+  constructor(remoteState: ChartState, remoteRevision: number, message?: string) {
+    super(message ?? 'Storage write conflict: remote revision is ahead')
+    this.name = 'StorageConflictError'
+    this.remoteState = remoteState
+    this.remoteRevision = remoteRevision
+    // Preserve prototype chain across transpilation targets
+    Object.setPrototypeOf(this, StorageConflictError.prototype)
+  }
+}
+
+/**
  * Storage adapter interface.
  *
- * Implement this interface to persist chart state to any backend.
+ * Implement this interface to persist chart state to any backend, or use one
+ * of the bundled implementations:
  *
  * @example
  * ```typescript
- * // localStorage implementation
- * const localStorageAdapter: StorageAdapter = {
- *   async save(key, state) {
- *     localStorage.setItem(`superchart:${key}`, JSON.stringify(state))
- *   },
- *   async load(key) {
- *     const data = localStorage.getItem(`superchart:${key}`)
- *     return data ? JSON.parse(data) : null
- *   },
- *   async delete(key) {
- *     localStorage.removeItem(`superchart:${key}`)
- *   }
- * }
+ * import { LocalStorageAdapter, HttpStorageAdapter } from 'superchart'
  *
- * // API implementation
- * const apiAdapter: StorageAdapter = {
- *   async save(key, state) {
- *     await fetch(`/api/charts/${key}`, {
- *       method: 'PUT',
- *       headers: { 'Content-Type': 'application/json' },
- *       body: JSON.stringify(state)
- *     })
- *   },
+ * // Browser localStorage
+ * const adapter = new LocalStorageAdapter()
+ *
+ * // REST backend (see PERSISTENCE_ROADMAP.md for the contract)
+ * const adapter = new HttpStorageAdapter({ baseUrl: '/api/chart-state' })
+ *
+ * new Superchart({ ..., storageAdapter: adapter, storageKey: 'btc-1h' })
+ * ```
+ *
+ * Custom implementation:
+ *
+ * @example
+ * ```typescript
+ * const adapter: StorageAdapter = {
  *   async load(key) {
- *     const res = await fetch(`/api/charts/${key}`)
- *     return res.ok ? res.json() : null
+ *     const raw = localStorage.getItem(`chart:${key}`)
+ *     if (!raw) return null
+ *     return JSON.parse(raw)  // { state, revision }
  *   },
+ *
+ *   async save(key, state, expectedRevision) {
+ *     const raw = localStorage.getItem(`chart:${key}`)
+ *     const current = raw ? JSON.parse(raw) : { revision: 0 }
+ *     if (expectedRevision !== undefined && current.revision !== expectedRevision) {
+ *       throw new StorageConflictError(current.state, current.revision)
+ *     }
+ *     const next = { state, revision: current.revision + 1 }
+ *     localStorage.setItem(`chart:${key}`, JSON.stringify(next))
+ *     return { revision: next.revision }
+ *   },
+ *
  *   async delete(key) {
- *     await fetch(`/api/charts/${key}`, { method: 'DELETE' })
+ *     localStorage.removeItem(`chart:${key}`)
  *   }
  * }
  * ```
  */
 export interface StorageAdapter {
   /**
-   * Save chart state.
-   * Called when indicators, overlays, or settings change.
+   * Load chart state and current revision.
    *
-   * @param key - Unique key for this chart (e.g., `${userId}:${symbol}`)
-   * @param state - Serialized chart state
+   * @param key - Unique key for this chart (e.g. `${userId}:${symbol}`)
+   * @returns `{ state, revision }` or `null` if no record exists
    */
-  save(key: string, state: ChartState): Promise<void>
+  load(key: string): Promise<StorageRecord | null>
 
   /**
-   * Load chart state.
-   * Called on chart initialization.
+   * Save chart state.
+   *
+   * If `expectedRevision` is provided and doesn't match the adapter's current
+   * revision for the key, throw `StorageConflictError` carrying the remote
+   * state so the caller can merge and retry. If `expectedRevision` is omitted,
+   * the save is unconditional (last-write-wins).
    *
    * @param key - Unique key for this chart
-   * @returns Saved state or null if none exists
+   * @param state - Serialized chart state
+   * @param expectedRevision - Last revision the caller observed; omit for last-write-wins
+   * @returns `{ revision }` — the new revision after the write
+   * @throws StorageConflictError when `expectedRevision` is stale
    */
-  load(key: string): Promise<ChartState | null>
+  save(key: string, state: ChartState, expectedRevision?: number): Promise<StorageWriteResult>
 
   /**
    * Delete saved state.
@@ -79,12 +153,12 @@ export interface StorageAdapter {
   delete(key: string): Promise<void>
 
   /**
-   * Optional: List all saved chart keys.
+   * Optional: list all saved chart keys with metadata.
    * Useful for displaying saved layouts or migrations.
    *
    * @param prefix - Optional prefix to filter keys
    */
-  list?(prefix?: string): Promise<string[]>
+  list?(prefix?: string): Promise<StorageEntry[]>
 }
 
 /**
@@ -92,7 +166,7 @@ export interface StorageAdapter {
  * This is what gets saved/loaded by the StorageAdapter.
  */
 export interface ChartState {
-  /** Schema version for migrations */
+  /** Schema version for migrations (NOT the optimistic-concurrency revision). */
   version: number
 
   /** Saved indicators (metadata only, not data) */
@@ -251,6 +325,39 @@ export function migrateChartState(state: unknown): ChartState | null {
   // if (s.version < 2) { migrate_v1_to_v2(s) }
 
   return s as ChartState
+}
+
+/**
+ * Merge two ChartState values for optimistic-concurrency conflict resolution.
+ *
+ * Strategy:
+ * - Indicators and overlays are merged by `id`. Items present in only one
+ *   side are kept; items present in both sides take the `local` version
+ *   (i.e. the in-progress edit the user just made wins over the remote
+ *   change for that single record).
+ * - All other fields (styles, paneLayout, preferences, overlayDefaults,
+ *   metadata) are last-write-wins from `local`.
+ *
+ * The retry loop in `useChartState` calls this when `StorageConflictError`
+ * is caught: the remote state becomes the new base, and the local mutation
+ * is replayed atop the merged result.
+ */
+export function mergeChartStates(local: ChartState, remote: ChartState): ChartState {
+  const overlayMap = new Map<string, SavedOverlay>()
+  for (const o of remote.overlays) overlayMap.set(o.id, o)
+  for (const o of local.overlays) overlayMap.set(o.id, o)
+
+  const indicatorMap = new Map<string, SavedIndicator>()
+  for (const i of remote.indicators) indicatorMap.set(i.id, i)
+  for (const i of local.indicators) indicatorMap.set(i.id, i)
+
+  return {
+    ...remote,
+    ...local,
+    indicators: Array.from(indicatorMap.values()),
+    overlays: Array.from(overlayMap.values()),
+    overlayDefaults: { ...remote.overlayDefaults, ...local.overlayDefaults },
+  }
 }
 
 // Re-export SavedOverlay from overlay.ts for convenience
