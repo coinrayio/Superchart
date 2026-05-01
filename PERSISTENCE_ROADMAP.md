@@ -67,12 +67,100 @@ The interface and `useChartState` save-on-change wiring already exist (~80% done
 
 - Templates of any kind (study, drawing, chart)
 - Multi-chart browser UI
-- Feature flags (Ticket 2)
+- Imperative save/load API and per-overlay save opt-out (Ticket 2)
+- Feature flags (Ticket 3)
 - Real-time / collaborative editing (see Future work below)
 
 ---
 
-## Ticket 2 — Feature flags (`enabledFeatures` / `disabledFeatures`)
+## Ticket 2 — Save coverage controls and explicit save/load API
+
+**Status:** TBD
+
+**Description:**
+Ticket 1 ships auto-save: any drawing-bar overlay or `superchart.createOverlay(...)` call is persisted automatically. This ticket adds two missing pieces:
+
+1. **Per-overlay opt-out** so consumers can create transient overlays that don't pollute saved state. Mirrors TV's `disableSave` flag on `createMultipointShape` / `createShape`.
+2. **Explicit imperative save/load API** on the `Superchart` class so consumers can trigger saves/loads/clears manually. Foundation for "revert" UX, pre-navigation flushes, and the multi-chart browser (Ticket 7).
+
+It also documents the architectural divide: which overlay-creation paths save and which don't.
+
+### What stays out of save (by design — not a gap)
+
+The fluent factories `createOrderLine`, `createPriceLine`, `createTradeLine` operate on the chart instance directly and do **not** flow through the save layer. This is deliberate:
+
+- They visualize app state from a backend (orders, alerts, trades), not user intent.
+- The backend is the source of truth; on reload the consumer's app code re-creates the lines from current backend data.
+- Saving them would cause stale data on reload and duplicate lines once the consumer re-creates them.
+
+We will **not** add `superchart.createOrderLine(...)` wrappers. The contract is documented in `docs/storage.md` instead.
+
+### Scope
+
+#### Per-overlay save opt-out
+- Add a `save?: boolean` field to `OverlayCreate` (default `true`). The Superchart-side type extension goes in `src/lib/types/overlay.ts`.
+- `useChartState.pushOverlay` reads `save !== false` before calling `syncOverlay` on draw-end / move-end.
+- `restoreChartState` is unaffected — overlays with `save: false` were never persisted, so there's nothing to restore.
+- Document: `superchart.createOverlay({ ..., save: false })` creates an overlay that renders but doesn't persist. Useful for transient indicators (e.g. crosshair-driven measurement, hover annotations).
+
+#### Explicit save/load API on the `Superchart` class
+Add four methods, all proxies to the `StorageAdapter` plus state-cache invalidation:
+
+```ts
+class Superchart {
+  /** Force a save of current chart state. Useful when auto_save_state is disabled or before page navigation. */
+  saveState(): Promise<void>
+
+  /** Reload state from the adapter and re-apply to the chart (overlays + indicators + styles). Useful for "revert to saved" UX. */
+  loadState(): Promise<void>
+
+  /** Delete the saved record for the current storageKey. Does NOT clear the chart visually. */
+  clearState(): Promise<void>
+
+  /** Passthrough to adapter.list(). Returns [] if the adapter doesn't implement it. Used by the multi-chart browser later. */
+  listSavedStates(prefix?: string): Promise<StorageEntry[]>
+}
+```
+
+These wrap `useChartState`'s existing `loadState` / `saveState` / `clearState` and `restoreChartState`.
+
+#### Document the architectural divide
+Add a table to `docs/storage.md` and update `PERSISTENCE_ROADMAP.md` glossary:
+
+| Path                                                       | Saves?              | When to use                                                         |
+|------------------------------------------------------------|---------------------|---------------------------------------------------------------------|
+| Drawing bar (user-drawn shapes)                            | ✅ default          | User intent — fib retracements, trendlines, etc.                    |
+| `superchart.createOverlay(...)`                            | ✅ default; `{ save: false }` opts out | Custom overlays from app code that should restore on reload         |
+| `superchart.getChart().createOverlay(...)` (direct klinecharts) | ❌                  | Escape hatch when you don't want Superchart's lifecycle             |
+| `createOrderLine(chart, ...)`, `createPriceLine(chart, ...)`, `createTradeLine(chart, ...)` (fluent factories) | ❌ deliberately     | Backend-driven visualizations — consumer re-creates on reload from current data |
+
+#### Storybook
+- Extend `API/Persistence` with a "Manual save/load" panel: buttons that call `saveState`, `loadState`, `clearState`, `listSavedStates`.
+- Add an example overlay created with `save: false` to demonstrate opt-out (e.g. a transient annotation that vanishes on reload).
+
+#### Docs
+- Update `docs/storage.md`: add the architectural-divide table; document the explicit API; document `save: false`.
+- Add a "When NOT to save" sub-section that explains the fluent-factory rationale.
+
+### Dependencies
+
+- Ticket 1 (the adapter, useChartState, store wiring)
+
+### Acceptance criteria
+
+- [ ] `superchart.saveState/loadState/clearState/listSavedStates` work in the Persistence storybook story
+- [ ] An overlay created with `save: false` is rendered, but does not appear in `adapter.load()`'s state and does not restore on reload
+- [ ] Order/price/trade lines created via fluent factories are NOT saved (verify by inspecting `adapter.load(key)` — `state.overlays` is empty after creating an order line)
+- [ ] `docs/storage.md` includes the architectural-divide table
+
+### Out of scope
+
+- Renaming/duplicating saved states (Ticket 7)
+- Periodic auto-save throttling (Ticket 1's behavior is "save on each mutation"; if needed, can be added later by buffering inside `withMergeRetry`)
+
+---
+
+## Ticket 3 — Feature flags (`enabledFeatures` / `disabledFeatures`)
 
 **Status:** TBD
 
@@ -112,6 +200,7 @@ Add a TradingView-style feature-flag system so consumers can opt UI features and
 ### Dependencies
 
 - Ticket 1 only because some flags (`auto_save_state`, `multi_chart_browser`) interact with persistence; no hard code dependency.
+- Ticket 2 is **not** required, but the `auto_save_state` flag's "off" path benefits from Ticket 2's `superchart.saveState()` (so consumers who disable auto-save still have a way to persist).
 
 ### Acceptance criteria
 
@@ -125,7 +214,7 @@ Add a TradingView-style feature-flag system so consumers can opt UI features and
 
 ---
 
-## Ticket 3 — Study templates (indicator presets)
+## Ticket 4 — Study templates (indicator presets)
 
 **Status:** TBD
 
@@ -152,7 +241,7 @@ Save/load named indicator configurations (e.g. "RSI 14 with my settings"). User 
 ### Dependencies
 
 - Ticket 1 (StorageAdapter, HttpStorageAdapter, server)
-- Ticket 2 (`study_templates` flag)
+- Ticket 3 (`study_templates` flag)
 
 ### Acceptance criteria
 
@@ -163,7 +252,7 @@ Save/load named indicator configurations (e.g. "RSI 14 with my settings"). User 
 
 ---
 
-## Ticket 4 — Drawing templates (overlay presets)
+## Ticket 5 — Drawing templates (overlay presets)
 
 **Status:** TBD
 
@@ -172,7 +261,7 @@ Save/load named drawing-tool style presets per tool type. e.g. "My golden trendl
 
 ### Scope
 
-- **Storage extensions:** similar to Ticket 3 but keyed by `(toolName, templateName)`:
+- **Storage extensions:** similar to Ticket 4 but keyed by `(toolName, templateName)`:
   ```ts
   interface StorageAdapter {
     listDrawingTemplates?(toolName: string): Promise<DrawingTemplateMeta[]>
@@ -189,7 +278,7 @@ Save/load named drawing-tool style presets per tool type. e.g. "My golden trendl
 ### Dependencies
 
 - Ticket 1
-- Ticket 2 (`drawing_templates` flag)
+- Ticket 3 (`drawing_templates` flag)
 
 ### Acceptance criteria
 
@@ -199,7 +288,7 @@ Save/load named drawing-tool style presets per tool type. e.g. "My golden trendl
 
 ---
 
-## Ticket 5 — Chart templates (named layouts)
+## Ticket 6 — Chart templates (named layouts)
 
 **Status:** TBD
 
@@ -225,8 +314,8 @@ Save/load entire chart layouts under a name — pane structure, indicators, over
 ### Dependencies
 
 - Ticket 1
-- Ticket 2 (`chart_templates` flag)
-- Optional: Ticket 3+4 (template-of-templates is fine; templates inside a chart template are stored inline as concrete configs, not refs)
+- Ticket 3 (`chart_templates` flag)
+- Optional: Tickets 4+5 (template-of-templates is fine; templates inside a chart template are stored inline as concrete configs, not refs)
 
 ### Acceptance criteria
 
@@ -236,7 +325,7 @@ Save/load entire chart layouts under a name — pane structure, indicators, over
 
 ---
 
-## Ticket 6 — Multi-chart browser (saved layouts UI)
+## Ticket 7 — Multi-chart browser (saved layouts UI)
 
 **Status:** TBD
 
@@ -255,7 +344,9 @@ Provide the "Open chart" UX — list all `(storageKey)` rows the adapter has, le
 
 ### Dependencies
 
-- Ticket 1, Ticket 2
+- Ticket 1
+- Ticket 2 (uses `superchart.listSavedStates()`)
+- Ticket 3 (`multi_chart_browser` flag)
 
 ### Acceptance criteria
 
@@ -281,16 +372,18 @@ If both are passed, `storageAdapter` wins (explicit > implicit). Document in `do
 ## Working order summary
 
 ```
-Ticket 1 (Persistence + LocalStorage + HTTP + server) ← ALTD-1730 (now)
+Ticket 1 (Persistence + LocalStorage + HTTP + server) ← ALTD-1730 (shipped)
    ↓
-Ticket 2 (Feature flags)
+Ticket 2 (Save coverage controls + explicit save/load API)
+   ↓
+Ticket 3 (Feature flags)
    ↓                     ↘
-Ticket 3 (Study tpl)   Ticket 4 (Drawing tpl)   Ticket 5 (Chart tpl)
+Ticket 4 (Study tpl)   Ticket 5 (Drawing tpl)   Ticket 6 (Chart tpl)
                        ↓
-                       Ticket 6 (Multi-chart browser)
+                       Ticket 7 (Multi-chart browser)
 ```
 
-Tickets 3, 4, 5 can ship in any order after 2; 6 after at least one of 3-5 (so the browser has something interesting to list besides chart-state).
+Tickets 4, 5, 6 can ship in any order after 3; 7 needs Ticket 2's `listSavedStates` API plus at least one of 4-6 (so the browser has something interesting to list besides chart-state).
 
 ---
 
