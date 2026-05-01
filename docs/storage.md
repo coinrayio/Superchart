@@ -198,6 +198,83 @@ rejected even under thundering-herd conditions.
 
 ---
 
+## What gets saved (and what doesn't)
+
+Not every overlay should be saved. Some are user-drawn (clearly persistable);
+others are app-state-driven (orders, alerts, trades) where the *backend* is
+the source of truth and saving them would only cause stale data and
+duplicates on reload.
+
+| Path                                                                                  | Saves?                  | When to use it                                                                                         |
+|---------------------------------------------------------------------------------------|-------------------------|--------------------------------------------------------------------------------------------------------|
+| Drawing bar (user-drawn shapes)                                                       | ✅ default              | User intent — fib retracements, trendlines, annotations.                                               |
+| `superchart.createOverlay({...})`                                                     | ✅ default; opt-out via `{ save: false }` | Custom overlays from app code that should restore on reload. Use `save: false` for transients (measurements, hover annotations). |
+| `superchart.getChart().createOverlay(...)` (direct klinecharts)                       | ❌                      | Escape hatch — bypasses Superchart's lifecycle entirely.                                               |
+| `createOrderLine(chart, ...)`, `createPriceLine(chart, ...)`, `createTradeLine(chart, ...)` | ❌ deliberately         | Backend-driven visualizations. The consumer's app code re-creates them on reload from current data.    |
+
+### Why fluent factories don't save
+
+Order lines, price lines, and trade lines visualize **app state from a
+backend** — a live order, an alert price, a historical trade. The backend is
+authoritative; on reload the consumer's app code reconstructs these from
+fresh data. If the chart library also saved them, you'd get a stale entity
+plus a fresh one drawn on top.
+
+By design, these factories take a `chart` argument and bypass Superchart's
+save layer entirely. There are no `superchart.createOrderLine(...)`
+wrappers. **You** own their lifecycle.
+
+### Per-overlay opt-out
+
+Mirroring TradingView's `disableSave` flag on `createMultipointShape` /
+`createShape`:
+
+```typescript
+// Transient overlay — renders, never persists, never restores.
+superchart.createOverlay({
+  name: 'rectangle',
+  points: [{ timestamp: t0, value: p0 }, { timestamp: t1, value: p1 }],
+  save: false,
+})
+```
+
+Useful for ephemeral annotations (e.g. a hover-driven measurement, a
+"highlighted candle" rectangle that's purely a UI hint).
+
+---
+
+## Imperative save/load API
+
+Auto-save handles the common case, but consumers sometimes need explicit
+control — a "Save" button, pre-navigation flush, "revert to saved" UX, or a
+custom chart browser.
+
+```typescript
+// Force a save of current chart state (last-write-wins, no merge-retry).
+await superchart.saveState()
+
+// Re-fetch saved state from the adapter and re-apply to the chart.
+// Best invoked once after the chart has mounted, before user interaction.
+// (Currently additive — overlays/indicators already on the chart aren't
+// removed first; remount the chart for a clean "revert" UX.)
+await superchart.loadState()
+
+// Delete the saved record for the current storageKey.
+// Does NOT clear the chart visually — current overlays/indicators remain.
+await superchart.clearState()
+
+// Adapter's list passthrough. Returns [] if no adapter is configured or
+// the adapter doesn't implement list().
+const entries = await superchart.listSavedStates()
+// → [{ key, revision, savedAt, symbol?, period? }, ...]
+```
+
+These complement (don't replace) the auto-save behavior. If you're disabling
+auto-save (via the upcoming `auto_save_state` feature flag) you'll want to
+call `saveState()` from your own code at the right moments.
+
+---
+
 ## Storage key strategies
 
 `storageKey` is opaque to Superchart — pick whatever distinguishes the chart

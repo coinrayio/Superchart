@@ -111,6 +111,63 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
     }
   }
 
+  // Imperative API demos (Ticket 2)
+  const handleSaveNow = async () => {
+    try {
+      await superchartRef.current?.saveState()
+      await refreshRevision()
+      setLastError(null)
+    } catch (err) {
+      setLastError((err as Error).message)
+    }
+  }
+
+  const handleReloadFromAdapter = async () => {
+    try {
+      await superchartRef.current?.loadState()
+      await refreshRevision()
+      setLastError(null)
+    } catch (err) {
+      setLastError((err as Error).message)
+    }
+  }
+
+  const handleListSaved = async () => {
+    try {
+      const entries = await superchartRef.current?.listSavedStates() ?? []
+      setLastError(null)
+      // eslint-disable-next-line no-alert
+      alert(
+        entries.length === 0
+          ? '(no saved states)'
+          : entries.map(e => `${e.key} — rev ${e.revision}`).join('\n')
+      )
+    } catch (err) {
+      setLastError((err as Error).message)
+    }
+  }
+
+  // `save: false` opt-out demo — draws a transient rectangle that won't
+  // be persisted, so it disappears on the next reload even though other
+  // drawings stay.
+  const handleAddTransient = () => {
+    const sc = superchartRef.current
+    const chart = sc?.getChart()
+    if (!sc || !chart) return
+    const dataList = chart.getDataList()
+    if (dataList.length < 4) return
+    const last = dataList[dataList.length - 1]!
+    const earlier = dataList[Math.max(0, dataList.length - 8)]!
+    sc.createOverlay({
+      name: 'rect',
+      points: [
+        { timestamp: earlier.timestamp, value: earlier.high },
+        { timestamp: last.timestamp, value: last.low },
+      ],
+      save: false,
+    })
+  }
+
   if (!TOKEN) {
     return (
       <div style={{padding: 20, color: "#f44", fontFamily: "monospace"}}>
@@ -139,20 +196,32 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
         {lastError && (
           <div style={{color: "#f88", marginTop: 6}}>Last error: {lastError}</div>
         )}
-        <div style={{marginTop: 8}}>
-          <button
-            onClick={handleClear}
-            style={{
-              padding: "4px 10px", fontSize: 12, fontFamily: "monospace",
-              background: "#2a2a3a", color: "#fff", border: "1px solid #555",
-              borderRadius: 3, cursor: "pointer",
-            }}
-          >
-            Clear & reload
-          </button>
+        <div style={{marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4}}>
+          {[
+            {label: "Save now", onClick: handleSaveNow, title: "Force-save current chart state via superchart.saveState()"},
+            {label: "Reload", onClick: handleReloadFromAdapter, title: "Re-fetch and re-apply via superchart.loadState() (additive)"},
+            {label: "List saved", onClick: handleListSaved, title: "Alert all saved entries via superchart.listSavedStates()"},
+            {label: "Add transient", onClick: handleAddTransient, title: "Draw a rectangle with save: false — disappears on reload"},
+            {label: "Clear & reload", onClick: handleClear, title: "Delete saved record and reload the page"},
+          ].map(b => (
+            <button
+              key={b.label}
+              onClick={b.onClick}
+              title={b.title}
+              style={{
+                padding: "4px 10px", fontSize: 11, fontFamily: "monospace",
+                background: "#2a2a3a", color: "#fff", border: "1px solid #555",
+                borderRadius: 3, cursor: "pointer",
+              }}
+            >
+              {b.label}
+            </button>
+          ))}
         </div>
         <div style={{marginTop: 8, fontSize: 11, color: "#888"}}>
-          Draw overlays to trigger saves. Reload to verify they restore.
+          Draw overlays to trigger auto-saves. "Add transient" creates an
+          overlay with <code>save:&nbsp;false</code> — it renders but
+          isn't persisted, so it vanishes on reload.
         </div>
       </div>
     </div>

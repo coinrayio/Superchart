@@ -126,7 +126,14 @@ function SuperchartInner(props: SuperchartComponentProps) {
   const mainIndicators = useStoreValue(store.mainIndicators, store.subscribeMainIndicators)
   const subIndicators = useStoreValue(store.subIndicators, store.subscribeSubIndicators)
 
-  const { createIndicator, pushOverlay } = useChartState()
+  const {
+    createIndicator,
+    pushOverlay,
+    saveStateExplicit,
+    restoreChartState,
+    clearState,
+    listSavedStates,
+  } = useChartState()
 
   // Modal visibility states
   const [indicatorModalVisible, setIndicatorModalVisible] = useState(false)
@@ -360,6 +367,12 @@ function SuperchartInner(props: SuperchartComponentProps) {
         chartWidgetRef.current?.getScreenshotUrl(type, backgroundColor) ?? '',
       createOverlay: (overlay, paneId) => pushOverlay(overlay, paneId),
       setOverlayMode: (mode) => store.instanceApi()?.overrideOverlay({ mode }),
+
+      // Persistence — explicit imperative API (Ticket 2)
+      saveState: () => saveStateExplicit(),
+      loadState: () => restoreChartState(),
+      clearState: () => clearState(),
+      listSavedStates: (prefix) => listSavedStates(prefix),
       getBackendIndicators: () => backendApi,
       openScriptEditor: (options) => {
         if (options?.readOnly) {

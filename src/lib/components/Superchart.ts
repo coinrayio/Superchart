@@ -22,7 +22,7 @@ import type {
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
 import type { Period, SymbolInfo } from '../types/chart'
-import type { StorageAdapter } from '../types/storage'
+import type { StorageAdapter, StorageEntry } from '../types/storage'
 import type { IndicatorProvider } from '../types/indicator'
 import type { ScriptProvider } from '../types/script'
 import type { OverlayProperties } from '../types/overlay'
@@ -223,10 +223,21 @@ export interface SuperchartApi {
   resize: () => void
   /** Get screenshot URL */
   getScreenshotUrl: (type?: 'png' | 'jpeg', backgroundColor?: string) => string
-  /** Create an overlay */
-  createOverlay: (overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> }, paneId?: string) => string | null
+  /** Create an overlay. Pass `save: false` to opt this overlay out of persistence (renders but isn't written to the StorageAdapter). */
+  createOverlay: (overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean }, paneId?: string) => string | null
   /** Set overlay mode */
   setOverlayMode: (mode: OverlayMode) => void
+
+  // Persistence — explicit imperative API (Ticket 2 of PERSISTENCE_ROADMAP.md)
+  /** Force-save current chart state to the StorageAdapter (last-write-wins). No-op if no adapter is configured. */
+  saveState: () => Promise<void>
+  /** Re-fetch saved state from the adapter and apply to the chart (overlays, indicators, styles). Best invoked after the chart has mounted but before the user has interacted. */
+  loadState: () => Promise<void>
+  /** Delete the saved record for the current `storageKey`. Does NOT clear the chart visually — the chart keeps its current overlays/indicators in memory. */
+  clearState: () => Promise<void>
+  /** List saved chart-state entries from the adapter. Returns `[]` when no adapter is configured or the adapter doesn't implement `list`. */
+  listSavedStates: (prefix?: string) => Promise<StorageEntry[]>
+
   /** Get the backend indicators API (null if no IndicatorProvider configured) */
   getBackendIndicators: () => UseBackendIndicatorsReturn | null
   /**
@@ -657,7 +668,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   createOverlay(
-    overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
+    overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean },
     paneId?: string
   ): string | null {
     return this._api?.createOverlay(overlay, paneId) ?? null
@@ -665,6 +676,24 @@ export default class Superchart implements SuperchartApi {
 
   setOverlayMode(mode: OverlayMode): void {
     this._api?.setOverlayMode(mode)
+  }
+
+  // ---- Persistence — explicit imperative API (Ticket 2) ----
+
+  async saveState(): Promise<void> {
+    return this._api?.saveState() ?? Promise.resolve()
+  }
+
+  async loadState(): Promise<void> {
+    return this._api?.loadState() ?? Promise.resolve()
+  }
+
+  async clearState(): Promise<void> {
+    return this._api?.clearState() ?? Promise.resolve()
+  }
+
+  async listSavedStates(prefix?: string): Promise<StorageEntry[]> {
+    return (await this._api?.listSavedStates(prefix)) ?? []
   }
 
   getBackendIndicators(): UseBackendIndicatorsReturn | null {

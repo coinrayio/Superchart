@@ -22,6 +22,7 @@ import type { ChartState, SavedIndicator } from '../types/storage'
 import type { SavedOverlay, OverlayProperties, ProOverlay } from '../types/overlay'
 import { isOverlayVisibleForPeriod } from '../types/overlay'
 import { createEmptyChartState, mergeChartStates, StorageConflictError } from '../types/storage'
+import type { StorageEntry } from '../types/storage'
 import { ctrlKeyedDown } from '../store/keyEventStore'
 import type { OverlayType } from '../store/chartStore'
 import { getDefaultForOverlay, setDefaultForOverlay, setOverlayDefaults } from '../store/overlayDefaultStyles'
@@ -338,19 +339,29 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const pushOverlay = useCallback(
     (
-      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
+      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean },
       paneId?: string,
       redrawing = false
     ): Nullable<string> => {
       const chartInstance = store.instanceApi()
       if (!chartInstance) return null
 
+      // Per-overlay save opt-out (mirrors TV's `disableSave`). Default `true`.
+      // When false, this overlay is rendered but never written to the
+      // StorageAdapter, and won't restore on reload — useful for transient
+      // visualizations (measurement tools, hover annotations, app-state-
+      // driven things the consumer wants to manage themselves).
+      const shouldSave = overlay.save !== false
+
       // Merge default style template when creating new overlays (not restoring from saved state)
       const effectiveProperties = redrawing
         ? overlay.properties
         : { ...getDefaultForOverlay(overlay.name), ...overlay.properties }
 
-      const id = chartInstance.createOverlay({ ...overlay, paneId }) as Nullable<string>
+      // Strip our extension fields before passing to klinecharts — `save` and
+      // `properties` are Superchart-only and would be ignored at best.
+      const { save: _save, properties: _properties, ...overlayForKline } = overlay
+      const id = chartInstance.createOverlay({ ...overlayForKline, paneId }) as Nullable<string>
       if (!id) return null
 
       const createdOverlay = chartInstance.getOverlays({ id })[0]
@@ -402,14 +413,15 @@ export function useChartState(options: UseChartStateOptions = {}) {
         id: createdOverlay.id,
         ...(klineStyles ? { styles: klineStyles } : {}),
         onDrawEnd: (event) => {
-          // Don't sync temporary overlays like measure tool
-          if (!['measure'].includes(createdOverlay.name)) {
+          // Skip sync for: explicit opt-out (`save: false`) or transient
+          // overlays like the measure tool that are never persisted.
+          if (shouldSave && !['measure'].includes(createdOverlay.name)) {
             syncOverlay(event.overlay, effectiveProperties)
           }
           return false
         },
         onPressedMoveEnd: (event) => {
-          if (!['measure'].includes(createdOverlay.name)) {
+          if (shouldSave && !['measure'].includes(createdOverlay.name)) {
             syncOverlay(event.overlay, effectiveProperties)
           }
           return false
@@ -430,8 +442,8 @@ export function useChartState(options: UseChartStateOptions = {}) {
         onDoubleClick: createdOverlay.onDoubleClick ?? options.onOverlayDoubleClick ?? handleDoubleClick,
       })
 
-      // Sync to storage if not redrawing from saved state
-      if (!redrawing) {
+      // Sync to storage if not redrawing from saved state and save isn't opted out.
+      if (!redrawing && shouldSave) {
         syncOverlay(createdOverlay, effectiveProperties)
       }
 
@@ -715,12 +727,42 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const clearState = useCallback(async (): Promise<void> => {
     stateCache.current = createEmptyChartState()
+    revisionCache.current = null
     const adapter = store.storageAdapter()
     const key = store.storageKey()
     if (adapter) {
       await adapter.delete(key)
     }
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Public imperative API (Ticket 2). Exposed verbatim by Superchart.saveState/
+  // loadState/clearState/listSavedStates. Keep the names verbose enough to
+  // distinguish "force-save current state" from the per-mutation `saveState`
+  // helper above.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Force-save the current chart state to the StorageAdapter (last-write-wins,
+   * no merge-retry). For consumer code that wants explicit control — e.g. a
+   * "Save" button, pre-navigation flush, or when `auto_save_state` is off.
+   */
+  const saveStateExplicit = useCallback(async (): Promise<void> => {
+    const state = stateCache.current ?? (await loadState())
+    await saveState(state)
+  }, [loadState, saveState])
+
+  /**
+   * Passthrough to `StorageAdapter.list()`. Returns `[]` when no adapter is
+   * configured or the adapter doesn't implement `list`. Used by the multi-
+   * chart browser (Ticket 7) but exposed now so consumers can build their
+   * own list UIs immediately.
+   */
+  const listSavedStates = useCallback(async (prefix?: string): Promise<StorageEntry[]> => {
+    const adapter = store.storageAdapter()
+    if (!adapter || !adapter.list) return []
+    return adapter.list(prefix)
+  }, [store])
 
   return {
     // Indicator methods
@@ -739,10 +781,14 @@ export function useChartState(options: UseChartStateOptions = {}) {
     modifyOverlayFigureStyles,
     popOverlay,
 
-    // State management
+    // State management (internal — used by mutations)
     loadState,
     saveState,
     restoreChartState,
     clearState,
+
+    // Public imperative API (Ticket 2)
+    saveStateExplicit,
+    listSavedStates,
   }
 }
