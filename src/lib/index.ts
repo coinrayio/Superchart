@@ -89,6 +89,11 @@ export { LocalStorageAdapter } from './storage/localStorage'
 export type { LocalStorageAdapterOptions } from './storage/localStorage'
 export { HttpStorageAdapter } from './storage/http'
 export type { HttpStorageAdapterOptions } from './storage/http'
+
+// Feature flags (Ticket 3 of PERSISTENCE_ROADMAP.md)
+export type { FeatureFlag } from './features/types'
+export { FEATURE_DEFAULTS } from './features/defaults'
+export { useFeature } from './features/useFeature'
 export type { IndicatorProvider, IndicatorDefinition } from './types/indicator'
 export type { UseBackendIndicatorsReturn } from './hooks/useBackendIndicators'
 export type { OverlayProperties, ProOverlay, ProOverlayCreate, ProOverlayTemplate } from './types/overlay'

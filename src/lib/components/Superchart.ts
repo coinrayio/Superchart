@@ -23,6 +23,7 @@ import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
 import type { Period, SymbolInfo } from '../types/chart'
 import type { StorageAdapter, StorageEntry } from '../types/storage'
+import type { FeatureFlag } from '../features/types'
 import type { IndicatorProvider } from '../types/indicator'
 import type { ScriptProvider } from '../types/script'
 import type { OverlayProperties } from '../types/overlay'
@@ -150,17 +151,41 @@ export interface SuperchartOptions {
   scriptProvider?: ScriptProvider
 
   // Optional - UI toggles
-  /** Show drawing toolbar (default: false) */
+  /**
+   * Initial *visibility state* of the drawing toolbar (default: false). The
+   * user can toggle this at runtime via the period-bar menu button.
+   *
+   * Distinct from the `drawing_bar` feature flag, which controls whether
+   * the feature is *available* at all. When the flag is disabled, the
+   * drawing toolbar (and its toggle button) are hidden regardless of
+   * this option.
+   */
   drawingBarVisible?: boolean
   /** Show volume indicator (default: true) */
   showVolume?: boolean
   /**
-   * Show the period bar (default: true). When false the bar is not rendered
-   * and the chart canvas reclaims the space. Per-button hide / disable is
-   * done by the consumer via CSS on `[data-button="<id>"]` — see the feature
-   * doc for button ids and example rules.
+   * Initial *visibility state* of the period bar (default: true). When
+   * false the bar is not rendered and the chart canvas reclaims the space.
+   * Per-button hide / disable is done by the consumer via CSS on
+   * `[data-button="<id>"]` — see the feature doc for button ids.
+   *
+   * Distinct from the `period_bar` feature flag, which controls whether
+   * the feature is available at all.
    */
   periodBarVisible?: boolean
+
+  // Feature flags (Ticket 3 of PERSISTENCE_ROADMAP.md)
+  /** Features to force-enable. Overrides defaults; loses to `disabledFeatures` if a flag appears in both. */
+  enabledFeatures?: FeatureFlag[]
+  /** Features to force-disable. Overrides defaults and `enabledFeatures`. */
+  disabledFeatures?: FeatureFlag[]
+  /**
+   * Auto-save debounce in milliseconds. 0 (default) saves on every mutation.
+   * Set to e.g. 1500 to collapse rapid edits into one save after 1.5s idle.
+   * Mirrors TradingView's `auto_save_delay`. Companion to the
+   * `auto_save_state` feature flag.
+   */
+  autoSaveDelay?: number
 
   // Optional - Available options
   /** Available period options */
@@ -351,8 +376,26 @@ export default class Superchart implements SuperchartApi {
     this._store.setLocale(options.locale ?? 'en-US')
     this._store.setTimezone(options.timezone ?? 'Etc/UTC')
     this._store.setMainIndicators(options.mainIndicators ?? [])
+
+    // Feature flags (developer-controlled "is this feature available?").
+    // Distinct from runtime visibility state below.
+    if (options.enabledFeatures) {
+      for (const f of options.enabledFeatures) this._store.setFeatureEnabled(f, true)
+    }
+    if (options.disabledFeatures) {
+      // disabledFeatures wins when a flag is in both arrays (matches TV).
+      for (const f of options.disabledFeatures) this._store.setFeatureEnabled(f, false)
+    }
+
+    // Initial visibility state (user-toggleable at runtime). Orthogonal
+    // to the flag system — the flag controls whether the toggle is even
+    // available; this option seeds the state when it is.
     this._store.setDrawingBarVisible(options.drawingBarVisible ?? false)
     this._store.setPeriodBarVisible(options.periodBarVisible ?? true)
+
+    if (options.autoSaveDelay !== undefined) {
+      this._store.setAutoSaveDelay(options.autoSaveDelay)
+    }
 
     this._store.setDebug(options.debug ?? true)
 
@@ -710,6 +753,22 @@ export default class Superchart implements SuperchartApi {
 
   setPeriodBarVisible(visible: boolean): void {
     this._api?.setPeriodBarVisible(visible)
+  }
+
+  // ---- Feature flags (Ticket 3) ----
+
+  /** Returns true if `flag` is currently enabled for this Superchart instance. */
+  isFeatureEnabled(flag: FeatureFlag): boolean {
+    return this._store.isFeatureEnabled(flag)
+  }
+
+  /**
+   * Toggle a feature at runtime. Components subscribed via `useFeature(flag)`
+   * (or directly to `subscribeFeatures`) re-render to reflect the change —
+   * no remount required.
+   */
+  setFeatureEnabled(flag: FeatureFlag, enabled: boolean): void {
+    this._store.setFeatureEnabled(flag, enabled)
   }
 
   createButton(options?: ToolbarButtonOptions): HTMLElement {

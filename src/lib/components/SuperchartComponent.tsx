@@ -28,6 +28,7 @@ import type { SearchSymbolResult } from '../types/datafeed'
 import type { SuperchartApi } from './Superchart'
 import type { ChartStore } from '../store/chartStore'
 import { ChartStoreContext } from '../store/chartStoreContext'
+import { useFeature } from '../features/useFeature'
 import { log } from '../utils/log'
 import { useChartState } from '../hooks/useChartState'
 import { translateTimezone } from '../widget/timezone-modal/data'
@@ -125,6 +126,12 @@ function SuperchartInner(props: SuperchartComponentProps) {
   const overlaySettingVisible = useStoreValue(store.showOverlaySetting, store.subscribeShowOverlaySetting)
   const mainIndicators = useStoreValue(store.mainIndicators, store.subscribeMainIndicators)
   const subIndicators = useStoreValue(store.subIndicators, store.subscribeSubIndicators)
+
+  // Feature flags — control whether features are *available*. Combine with
+  // user-controlled visibility state for UIs that have both (e.g. the
+  // drawing bar can be toggled by the user only when the flag is on).
+  const drawingBarFeature = useFeature('drawing_bar')
+  const periodBarFeature = useFeature('period_bar')
 
   const {
     createIndicator,
@@ -514,7 +521,7 @@ function SuperchartInner(props: SuperchartComponentProps) {
       data-theme={theme}
     >
       {/* Period Bar - Main toolbar - only render when we have data */}
-      {periodBarVisible && symbol && period && (
+      {periodBarFeature && periodBarVisible && symbol && period && (
         <PeriodBar
         locale={locale}
         symbol={symbol}
@@ -532,6 +539,9 @@ function SuperchartInner(props: SuperchartComponentProps) {
           { type: 'month', span: 1, text: 'M' },
         ]}
         onMenuClick={() => {
+          // Toggle the user-controlled visibility state. The `drawing_bar`
+          // feature flag is independent: when the flag is off, the toggle
+          // button itself is hidden and this handler can't be reached.
           store.setDrawingBarVisible(!drawingBarVisible)
           setTimeout(() => store.instanceApi()?.resize(), 0)
         }}
@@ -598,8 +608,9 @@ function SuperchartInner(props: SuperchartComponentProps) {
           </div>
         )}
 
-        {/* Drawing bar */}
-        {drawingBarVisible && (
+        {/* Drawing bar — render only when the feature is enabled AND
+            the user has toggled it visible. */}
+        {drawingBarFeature && drawingBarVisible && (
           <DrawingBar
             locale={locale}
             onDrawingItemClick={(overlay) => pushOverlay(overlay)}
