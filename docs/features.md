@@ -47,7 +47,7 @@ remount required.
 
 | Flag                | Default | Effect                                                             |
 |---------------------|---------|--------------------------------------------------------------------|
-| `drawing_bar`       | `false` | Show the left-side drawing toolbar.                                |
+| `drawing_bar`       | `true`  | Drawing toolbar feature is available. Whether it's currently *visible* is the orthogonal `drawingBarVisible` option (defaults to `false`). |
 | `period_bar`        | `true`  | Show the top period/symbol toolbar. When `false`, the chart canvas reclaims the space. |
 | `screenshot_button` | `true`  | Show the screenshot button in the period bar.                      |
 | `fullscreen_button` | `true`  | Show the fullscreen button in the period bar.                      |

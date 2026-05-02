@@ -50,6 +50,40 @@ export interface StorageEntry {
   period?: string
 }
 
+// ---- Study templates (Ticket 4 of PERSISTENCE_ROADMAP.md) ----
+
+/**
+ * Cheap metadata about a saved study (indicator) template — what to show
+ * in a list UI without loading the full template body. Returned by
+ * `StorageAdapter.listStudyTemplates`.
+ */
+export interface StudyTemplateMeta {
+  /** User-given template name. Unique within the adapter. */
+  name: string
+  /** Indicator type the template is for ("RSI", "MACD", etc.). */
+  indicatorName: string
+  /** When `true`, this template ships with Superchart and cannot be deleted. */
+  system?: boolean
+  /** Last write timestamp (ms since epoch). */
+  savedAt?: number
+}
+
+/**
+ * Full study template payload — what `loadStudyTemplate` returns and what
+ * `saveStudyTemplate` accepts. Carries the indicator's reusable state
+ * (calc params, settings, styles) but not instance fields like `id`,
+ * `paneId`, or visibility, which belong to a specific chart's
+ * `SavedIndicator`.
+ */
+export interface StudyTemplate extends StudyTemplateMeta {
+  /** User-configured calc params (built-in indicators). */
+  calcParams?: unknown[]
+  /** User-configured settings (backend indicators). */
+  settings?: Record<string, SettingValue>
+  /** Optional style overrides snapshotted with the template. */
+  styles?: Record<string, unknown>
+}
+
 /**
  * Thrown by `StorageAdapter.save` when `expectedRevision` is supplied and
  * doesn't match the adapter's current revision for that key. Carries the
@@ -159,6 +193,30 @@ export interface StorageAdapter {
    * @param prefix - Optional prefix to filter keys
    */
   list?(prefix?: string): Promise<StorageEntry[]>
+
+  // ---- Study templates (Ticket 4) ----
+  // All four methods are optional. Adapters that don't implement them
+  // should leave the property undefined; the UI hides the templates
+  // section gracefully when methods are missing.
+
+  /**
+   * List study templates available to this adapter. Implementations
+   * typically merge bundled "system" templates with user-saved ones.
+   * Optionally filter by indicator type.
+   */
+  listStudyTemplates?(indicatorName?: string): Promise<StudyTemplateMeta[]>
+
+  /** Load the full body of a single study template by name. */
+  loadStudyTemplate?(name: string): Promise<StudyTemplate | null>
+
+  /** Save (insert or update) a study template by name. */
+  saveStudyTemplate?(name: string, template: StudyTemplate): Promise<void>
+
+  /**
+   * Delete a user template. Implementations should reject (or no-op)
+   * for `system: true` templates — those are read-only.
+   */
+  deleteStudyTemplate?(name: string): Promise<void>
 }
 
 /**

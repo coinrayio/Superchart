@@ -547,3 +547,126 @@ export function listChartStates(prefix?: string): ChartStateEntry[] {
     period: row.period ?? undefined,
   }))
 }
+
+// ----------------------------------------------------------------------------
+// Study templates (Ticket 4 of PERSISTENCE_ROADMAP.md)
+// User templates live in SQLite. System templates are bundled in code below
+// and merged into list/load responses; PUT/DELETE on a system name is
+// rejected with 403 by the route handler.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS study_templates (
+    name           TEXT PRIMARY KEY,
+    indicator_name TEXT NOT NULL,
+    body           TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+  )
+`)
+
+interface StudyTemplateRow {
+  name: string
+  indicator_name: string
+  body: string
+  updated_at: string
+}
+
+export interface StudyTemplate {
+  name: string
+  indicatorName: string
+  system?: boolean
+  savedAt?: number
+  calcParams?: unknown[]
+  settings?: Record<string, unknown>
+  styles?: Record<string, unknown>
+}
+
+export interface StudyTemplateMeta {
+  name: string
+  indicatorName: string
+  system?: boolean
+  savedAt?: number
+}
+
+/**
+ * Bundled system templates. Mirrors src/lib/templates/systemStudyTemplates.ts
+ * — the server reports them in list/load so HTTP-mode consumers see the
+ * same defaults as LocalStorageAdapter consumers. Keep this list in sync
+ * with the client-side bundle.
+ */
+const SYSTEM_STUDY_TEMPLATES: StudyTemplate[] = [
+  { name: 'RSI 14', indicatorName: 'RSI', calcParams: [14], system: true },
+  { name: 'MACD 12/26/9', indicatorName: 'MACD', calcParams: [12, 26, 9], system: true },
+  { name: 'EMA 50', indicatorName: 'EMA', calcParams: [50], system: true },
+  { name: 'EMA 200', indicatorName: 'EMA', calcParams: [200], system: true },
+  { name: 'BOLL 20', indicatorName: 'BOLL', calcParams: [20, 2], system: true },
+]
+
+export function isSystemStudyTemplate(name: string): boolean {
+  return SYSTEM_STUDY_TEMPLATES.some(t => t.name === name)
+}
+
+export function listStudyTemplates(indicatorName?: string): StudyTemplateMeta[] {
+  const out: StudyTemplateMeta[] = []
+  // System first, then user — matches the LocalStorageAdapter ordering.
+  for (const t of SYSTEM_STUDY_TEMPLATES) {
+    if (indicatorName && t.indicatorName !== indicatorName) continue
+    out.push({ name: t.name, indicatorName: t.indicatorName, system: true, savedAt: t.savedAt })
+  }
+  const rows = (indicatorName
+    ? db.prepare('SELECT name, indicator_name, updated_at FROM study_templates WHERE indicator_name = ? ORDER BY updated_at DESC').all(indicatorName)
+    : db.prepare('SELECT name, indicator_name, updated_at FROM study_templates ORDER BY updated_at DESC').all()
+  ) as Array<{ name: string; indicator_name: string; updated_at: string }>
+  for (const row of rows) {
+    out.push({
+      name: row.name,
+      indicatorName: row.indicator_name,
+      savedAt: new Date(row.updated_at).getTime(),
+    })
+  }
+  return out
+}
+
+export function loadStudyTemplate(name: string): StudyTemplate | null {
+  // User copy wins, allowing a user to shadow a system template name.
+  const row = db.prepare('SELECT * FROM study_templates WHERE name = ?').get(name) as StudyTemplateRow | undefined
+  if (row) {
+    const body = JSON.parse(row.body) as StudyTemplate
+    return {
+      ...body,
+      name: row.name,
+      indicatorName: row.indicator_name,
+      savedAt: new Date(row.updated_at).getTime(),
+      system: false,
+    }
+  }
+  const systemMatch = SYSTEM_STUDY_TEMPLATES.find(t => t.name === name)
+  return systemMatch ?? null
+}
+
+/** Save (insert or update). Rejects when the name belongs to a system template. */
+export function saveStudyTemplate(name: string, template: StudyTemplate): { ok: true } | { ok: false; reason: 'system' } {
+  if (isSystemStudyTemplate(name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const updatedAt = new Date().toISOString()
+  const body = JSON.stringify({
+    calcParams: template.calcParams,
+    settings: template.settings,
+    styles: template.styles,
+  })
+  db.prepare(
+    'INSERT INTO study_templates (name, indicator_name, body, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(name) DO UPDATE SET indicator_name = excluded.indicator_name, body = excluded.body, updated_at = excluded.updated_at'
+  ).run(name, template.indicatorName, body, updatedAt)
+  return { ok: true }
+}
+
+/** Delete a user template. Returns false when the name is a system template (caller should 403). */
+export function deleteStudyTemplate(name: string): { ok: true; existed: boolean } | { ok: false; reason: 'system' } {
+  if (isSystemStudyTemplate(name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const result = db.prepare('DELETE FROM study_templates WHERE name = ?').run(name)
+  return { ok: true, existed: result.changes > 0 }
+}

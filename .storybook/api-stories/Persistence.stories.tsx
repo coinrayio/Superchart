@@ -223,6 +223,13 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
           overlay with <code>save:&nbsp;false</code> — it renders but
           isn't persisted, so it vanishes on reload.
         </div>
+        <div style={{marginTop: 8, fontSize: 11, color: "#888", borderTop: "1px solid #333", paddingTop: 8}}>
+          <strong style={{color: "#bbb"}}>Study templates:</strong> click the
+          indicator (fx) button in the period bar, add e.g. RSI, click its
+          settings cog → the modal shows a "Template" row with the bundled
+          system templates (RSI 14, MACD 12/26/9, …) plus any you save.
+          {adapterMode === "http" && " Requires examples/server running."}
+        </div>
       </div>
     </div>
   )

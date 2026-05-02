@@ -23,6 +23,8 @@ import {
   type StorageEntry,
   type StorageRecord,
   type StorageWriteResult,
+  type StudyTemplate,
+  type StudyTemplateMeta,
 } from '../types/storage'
 
 export interface HttpStorageAdapterOptions {
@@ -128,5 +130,74 @@ export class HttpStorageAdapter implements StorageAdapter {
     }
     const body = (await res.json()) as StorageEntry[]
     return body
+  }
+
+  // ---- Study templates (Ticket 4) ----
+  // Endpoints live at the parent of `baseUrl` to avoid collision with
+  // chart-state keys: if baseUrl is `/api/chart-state`, study templates
+  // are at `/api/study-templates`. Server is responsible for merging
+  // bundled "system" templates into list responses.
+
+  private studyTemplatesBase(): string {
+    // Walk one path segment up from baseUrl. Same origin assumed.
+    const idx = this.baseUrl.lastIndexOf('/')
+    const root = idx > 0 ? this.baseUrl.slice(0, idx) : ''
+    return `${root}/study-templates`
+  }
+
+  private studyTemplateUrl(name: string): string {
+    return `${this.studyTemplatesBase()}/${encodeURIComponent(name)}`
+  }
+
+  async listStudyTemplates(indicatorName?: string): Promise<StudyTemplateMeta[]> {
+    const url = indicatorName
+      ? `${this.studyTemplatesBase()}?indicatorName=${encodeURIComponent(indicatorName)}`
+      : this.studyTemplatesBase()
+    const res = await this._fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...this.buildHeaders() },
+    })
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.listStudyTemplates failed: ${res.status} ${res.statusText}`)
+    }
+    return (await res.json()) as StudyTemplateMeta[]
+  }
+
+  async loadStudyTemplate(name: string): Promise<StudyTemplate | null> {
+    const res = await this._fetch(this.studyTemplateUrl(name), {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...this.buildHeaders() },
+    })
+    if (res.status === 404) return null
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.loadStudyTemplate failed: ${res.status} ${res.statusText}`)
+    }
+    return (await res.json()) as StudyTemplate
+  }
+
+  async saveStudyTemplate(name: string, template: StudyTemplate): Promise<void> {
+    const res = await this._fetch(this.studyTemplateUrl(name), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...this.buildHeaders(),
+      },
+      body: JSON.stringify(template),
+    })
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.saveStudyTemplate failed: ${res.status} ${res.statusText}`)
+    }
+  }
+
+  async deleteStudyTemplate(name: string): Promise<void> {
+    const res = await this._fetch(this.studyTemplateUrl(name), {
+      method: 'DELETE',
+      headers: this.buildHeaders(),
+    })
+    if (!res.ok && res.status !== 404) {
+      // 403 indicates the server refused to delete a system template.
+      throw new Error(`HttpStorageAdapter.deleteStudyTemplate failed: ${res.status} ${res.statusText}`)
+    }
   }
 }

@@ -332,6 +332,85 @@ For an IndexedDB / REST / URL-encoded variant, see the bundled adapters in
 
 ---
 
+## Study templates (indicator presets)
+
+Save and re-apply named indicator configurations — TradingView calls
+these "study templates". The four adapter methods are **all optional**:
+adapters that don't implement them simply hide the templates UI in the
+indicator settings modal.
+
+```typescript
+interface StorageAdapter {
+  // …existing methods…
+  listStudyTemplates?(indicatorName?: string): Promise<StudyTemplateMeta[]>
+  loadStudyTemplate?(name: string): Promise<StudyTemplate | null>
+  saveStudyTemplate?(name: string, template: StudyTemplate): Promise<void>
+  deleteStudyTemplate?(name: string): Promise<void>
+}
+
+interface StudyTemplate extends StudyTemplateMeta {
+  calcParams?: unknown[]               // built-in indicators
+  settings?: Record<string, SettingValue>  // backend indicators
+  styles?: Record<string, unknown>
+}
+
+interface StudyTemplateMeta {
+  name: string
+  indicatorName: string
+  system?: boolean   // true when bundled (read-only)
+  savedAt?: number
+}
+```
+
+### Bundled "system" templates
+
+Both bundled adapters surface a small list of read-only presets via
+`listStudyTemplates` (RSI 14, MACD 12/26/9, EMA 50, EMA 200, BOLL 20).
+Custom adapters can choose to include them too — import from
+`'superchart'`:
+
+```typescript
+import { SYSTEM_STUDY_TEMPLATES } from 'superchart'
+```
+
+Saving over a system name creates a user copy that *shadows* the system
+one for subsequent loads. Deleting a system template throws (or returns
+`403` over HTTP).
+
+### REST contract
+
+```
+GET    {root}/study-templates                   → 200 [StudyTemplateMeta…]
+GET    {root}/study-templates?indicatorName=RSI → filtered list
+GET    {root}/study-templates/:name             → 200 StudyTemplate | 404
+PUT    {root}/study-templates/:name             body: StudyTemplate
+                                                → 204 | 403 (system name)
+DELETE {root}/study-templates/:name             → 204 | 403 | 404
+```
+
+`{root}` is the parent of the `chart-state` baseUrl. With
+`baseUrl: '/api/chart-state'`, study templates live at
+`/api/study-templates`.
+
+[`examples/server`](../examples/server) implements the contract on top
+of a `study_templates(name PK, indicator_name, body, updated_at)` SQLite
+table + a hardcoded list of system templates that mirrors the bundled
+client list. Keep both lists in sync when adding new system presets.
+
+### UI
+
+When `study_templates` feature flag is on AND the active adapter
+implements all four methods, the indicator settings modal shows a
+"Template" row with: a select listing system + user templates, an
+**Apply** button that overwrites the current form fields with the
+selected template's body, a **Save as…** button that prompts for a name,
+and a **Delete** button (disabled for system templates).
+
+Hide the row entirely by setting `disabledFeatures: ['study_templates']`
+in `SuperchartOptions`.
+
+---
+
 ## ChartState shape
 
 ```typescript

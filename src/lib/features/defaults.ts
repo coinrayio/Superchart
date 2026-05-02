@@ -8,9 +8,10 @@ import type { FeatureFlag } from './types'
 
 export const FEATURE_DEFAULTS: Record<FeatureFlag, boolean> = {
   // ---- Toolbars / chrome ----
-  // Drawing toolbar is opt-in (matches the existing `drawingBarVisible`
-  // option default). Most consumers don't need it.
-  drawing_bar: false,
+  // Drawing toolbar is *available* by default (the feature exists). Whether
+  // it's currently *visible* is the orthogonal `drawingBarVisible` option,
+  // which defaults to false — i.e. feature on, panel collapsed.
+  drawing_bar: true,
   period_bar: true,
   screenshot_button: true,
   fullscreen_button: true,

@@ -7,12 +7,15 @@
  * Follows the pattern from coinray-chart-ui/src/widget/indicator-setting-modal
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { utils } from 'klinecharts'
 import { Modal, Input, Switch, Color, Select } from '../../component'
 import i18n from '../../i18n'
 import { getIndicatorConfig, type IndicatorParamConfig } from './data'
 import type { IndicatorSettingDef, SettingValue } from '../../types/indicator'
+import { useChartStore } from '../../store/chartStoreContext'
+import { useFeature } from '../../features/useFeature'
+import type { StudyTemplate, StudyTemplateMeta } from '../../types/storage'
 
 export interface IndicatorSettingParams {
   indicatorName: string
@@ -59,6 +62,99 @@ export function IndicatorSettingModal({
   )
 
   const config = getIndicatorConfig(params.indicatorName)
+
+  // ---- Study templates (Ticket 4) ----
+  // Show the templates row only when the feature flag is on AND the
+  // configured adapter actually implements the four template methods.
+  // Adapters without template support → row hidden, behavior unchanged.
+  const store = useChartStore()
+  const studyTemplatesFeature = useFeature('study_templates')
+  const adapter = store.storageAdapter()
+  const adapterSupportsTemplates =
+    !!adapter &&
+    typeof adapter.listStudyTemplates === 'function' &&
+    typeof adapter.loadStudyTemplate === 'function' &&
+    typeof adapter.saveStudyTemplate === 'function'
+  const showTemplatesRow = studyTemplatesFeature && adapterSupportsTemplates
+
+  const [templateList, setTemplateList] = useState<StudyTemplateMeta[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [templateError, setTemplateError] = useState<string | null>(null)
+
+  const refreshTemplateList = async () => {
+    if (!showTemplatesRow || !adapter?.listStudyTemplates) return
+    try {
+      const list = await adapter.listStudyTemplates(params.indicatorName)
+      setTemplateList(list)
+    } catch (err) {
+      setTemplateError((err as Error).message)
+    }
+  }
+
+  useEffect(() => {
+    void refreshTemplateList()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.indicatorName, showTemplatesRow])
+
+  const applyTemplate = async () => {
+    if (!selectedTemplate || !adapter?.loadStudyTemplate) return
+    try {
+      const tpl = await adapter.loadStudyTemplate(selectedTemplate)
+      if (!tpl) {
+        setTemplateError('Template not found')
+        return
+      }
+      // Apply payload to whichever input mode is active. Built-in
+      // indicators get calcParams; backend indicators get settings.
+      if (isBackend && tpl.settings) {
+        setSettings({ ...tpl.settings })
+      } else if (!isBackend && tpl.calcParams) {
+        setCalcParams([...tpl.calcParams])
+      }
+      setTemplateError(null)
+    } catch (err) {
+      setTemplateError((err as Error).message)
+    }
+  }
+
+  const saveAsTemplate = async () => {
+    if (!adapter?.saveStudyTemplate) return
+    // eslint-disable-next-line no-alert
+    const name = window.prompt('Save template as…', '')?.trim()
+    if (!name) return
+    try {
+      const body: StudyTemplate = {
+        name,
+        indicatorName: params.indicatorName,
+        ...(isBackend ? { settings } : { calcParams }),
+      }
+      await adapter.saveStudyTemplate(name, body)
+      setSelectedTemplate(name)
+      await refreshTemplateList()
+      setTemplateError(null)
+    } catch (err) {
+      setTemplateError((err as Error).message)
+    }
+  }
+
+  const deleteTemplate = async () => {
+    if (!selectedTemplate || !adapter?.deleteStudyTemplate) return
+    const meta = templateList.find(t => t.name === selectedTemplate)
+    if (meta?.system) {
+      setTemplateError('Cannot delete system template')
+      return
+    }
+    try {
+      await adapter.deleteStudyTemplate(selectedTemplate)
+      setSelectedTemplate('')
+      await refreshTemplateList()
+      setTemplateError(null)
+    } catch (err) {
+      setTemplateError((err as Error).message)
+    }
+  }
+
+  const selectedMeta = templateList.find(t => t.name === selectedTemplate)
 
   const handleConfirm = () => {
     if (isBackend) {
@@ -108,6 +204,58 @@ export function IndicatorSettingModal({
       onClose={onClose}
     >
       <div className="superchart-indicator-setting-modal-content">
+        {showTemplatesRow && (
+          <div className="superchart-indicator-setting-modal-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <span className="superchart-indicator-setting-modal-label">
+              {i18n('template', locale) || 'Template'}
+            </span>
+            <Select
+              value={selectedTemplate}
+              dataSource={[
+                { key: '', text: '— select —' },
+                ...templateList.map(t => ({
+                  key: t.name,
+                  text: t.system ? `${t.name} (system)` : t.name,
+                })),
+              ]}
+              onSelected={(item) => {
+                const key = typeof item === 'string' ? item : item.key
+                setSelectedTemplate(key)
+              }}
+            />
+            <button
+              type="button"
+              disabled={!selectedTemplate}
+              onClick={() => { void applyTemplate() }}
+              style={{ padding: '4px 8px', fontSize: 12, cursor: selectedTemplate ? 'pointer' : 'not-allowed' }}
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              onClick={() => { void saveAsTemplate() }}
+              style={{ padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
+            >
+              Save as…
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTemplate || !!selectedMeta?.system}
+              title={selectedMeta?.system ? 'System templates cannot be deleted' : ''}
+              onClick={() => { void deleteTemplate() }}
+              style={{
+                padding: '4px 8px',
+                fontSize: 12,
+                cursor: selectedTemplate && !selectedMeta?.system ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Delete
+            </button>
+            {templateError && (
+              <span style={{ color: '#f88', fontSize: 11, width: '100%' }}>{templateError}</span>
+            )}
+          </div>
+        )}
         {isBackend ? (
           /* Backend indicator settings */
           backendSettings!.map((def: IndicatorSettingDef) => (

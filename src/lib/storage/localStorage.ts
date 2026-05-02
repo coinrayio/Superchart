@@ -16,7 +16,14 @@ import {
   type StorageEntry,
   type StorageRecord,
   type StorageWriteResult,
+  type StudyTemplate,
+  type StudyTemplateMeta,
 } from '../types/storage'
+import {
+  SYSTEM_STUDY_TEMPLATES,
+  findSystemStudyTemplate,
+  isSystemStudyTemplate,
+} from '../templates/systemStudyTemplates'
 
 interface StoredBlob {
   state: ChartState
@@ -127,5 +134,79 @@ export class LocalStorageAdapter implements StorageAdapter {
       })
     }
     return entries
+  }
+
+  // ---- Study templates (Ticket 4) ----
+  // System templates are merged in from the bundled list. User templates
+  // live under a separate prefix so iteration is cheap and they can't
+  // collide with chart-state keys.
+
+  private studyKey(name: string): string {
+    return `${this.prefix}study-template:${name}`
+  }
+
+  async listStudyTemplates(indicatorName?: string): Promise<StudyTemplateMeta[]> {
+    const out: StudyTemplateMeta[] = []
+    // System templates first so they sort to the top in UIs that rely on
+    // insertion order. They're also non-deletable.
+    for (const t of SYSTEM_STUDY_TEMPLATES) {
+      if (indicatorName && t.indicatorName !== indicatorName) continue
+      out.push({
+        name: t.name,
+        indicatorName: t.indicatorName,
+        system: true,
+        savedAt: t.savedAt,
+      })
+    }
+    const userPrefix = `${this.prefix}study-template:`
+    for (let i = 0; i < this.storage.length; i++) {
+      const fullKey = this.storage.key(i)
+      if (!fullKey || !fullKey.startsWith(userPrefix)) continue
+      const raw = this.storage.getItem(fullKey)
+      if (!raw) continue
+      try {
+        const tpl = JSON.parse(raw) as StudyTemplate
+        if (!tpl || typeof tpl !== 'object' || !tpl.name || !tpl.indicatorName) continue
+        if (indicatorName && tpl.indicatorName !== indicatorName) continue
+        out.push({
+          name: tpl.name,
+          indicatorName: tpl.indicatorName,
+          savedAt: tpl.savedAt,
+        })
+      } catch {
+        // Skip corrupt entries silently — listing should never throw.
+      }
+    }
+    return out
+  }
+
+  async loadStudyTemplate(name: string): Promise<StudyTemplate | null> {
+    // Check user storage first so a user can shadow a system template
+    // with the same name (e.g. tweak our default RSI 14).
+    const raw = this.storage.getItem(this.studyKey(name))
+    if (raw) {
+      try {
+        return JSON.parse(raw) as StudyTemplate
+      } catch {
+        return null
+      }
+    }
+    return findSystemStudyTemplate(name) ?? null
+  }
+
+  async saveStudyTemplate(name: string, template: StudyTemplate): Promise<void> {
+    // We allow saving over a system name — the user copy shadows the
+    // system one on subsequent loads. listStudyTemplates returns both
+    // entries; that's acceptable since names are unique within the
+    // user-storage namespace.
+    const blob: StudyTemplate = { ...template, name, savedAt: Date.now(), system: false }
+    this.storage.setItem(this.studyKey(name), JSON.stringify(blob))
+  }
+
+  async deleteStudyTemplate(name: string): Promise<void> {
+    if (isSystemStudyTemplate(name) && !this.storage.getItem(this.studyKey(name))) {
+      throw new Error(`Cannot delete system study template "${name}"`)
+    }
+    this.storage.removeItem(this.studyKey(name))
   }
 }

@@ -73,9 +73,12 @@ export type {
   StorageRecord,
   StorageWriteResult,
   StorageEntry,
+  StudyTemplate,
+  StudyTemplateMeta,
   SavedIndicator,
   ChartPreferences,
 } from './types/storage'
+export { SYSTEM_STUDY_TEMPLATES } from './templates/systemStudyTemplates'
 export {
   StorageConflictError,
   CHART_STATE_VERSION,
