@@ -61,6 +61,7 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
   const [pending, setPending] = useState(false)
   const [lastApplied, setLastApplied] = useState<VisibleTimeRange | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mountKey, setMountKey] = useState(0)
   const superchartRef = useRef<Superchart | null>(null)
 
   // Sync from Storybook controls when they change
@@ -82,16 +83,21 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
     setVisibleRange(range)
   }, [])
 
-  const handleJump = useCallback(async () => {
-    const sc = superchartRef.current
-    if (!sc) return
+  const computeRange = useCallback((): VisibleTimeRange | null => {
     const targetMs = new Date(target).getTime()
-    if (Number.isNaN(targetMs)) return
+    if (Number.isNaN(targetMs)) return null
     const targetSec = Math.floor(targetMs / 1000)
-    const range: VisibleTimeRange = {
+    return {
       from: targetSec - Math.floor(windowSec / 2),
       to: targetSec + Math.floor(windowSec / 2),
     }
+  }, [target, windowSec])
+
+  const handleJump = useCallback(async () => {
+    const sc = superchartRef.current
+    if (!sc) return
+    const range = computeRange()
+    if (!range) return
     setPending(true)
     setError(null)
     try {
@@ -108,7 +114,15 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
     } finally {
       setPending(false)
     }
-  }, [target, windowSec])
+  }, [computeRange])
+
+  const handleReload = useCallback(() => {
+    const range = computeRange()
+    if (!range) return
+    setError(null)
+    setVisibleRange(range)
+    setMountKey(k => k + 1)
+  }, [computeRange])
 
   const fmtTime = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 19).replace("T", " ")
 
@@ -166,6 +180,9 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
           <button style={buttonStyle} onClick={handleJump} disabled={pending}>
             {pending ? "fetching…" : "jump"}
           </button>
+          <button style={buttonStyle} onClick={handleReload} disabled={pending}>
+            reload
+          </button>
         </div>
         {lastApplied && (
           <div style={{color: "#888", fontSize: 11}}>
@@ -179,6 +196,7 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
         )}
       </div>
       <SuperchartCanvas
+        key={mountKey}
         symbol={symbol}
         period={period}
         theme={theme}

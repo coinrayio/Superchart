@@ -584,10 +584,13 @@ export default class Superchart implements SuperchartApi {
     return this._api?.getChart() ?? this._store.instanceApi()
   }
 
-  setVisibleRange(range: VisibleTimeRange): Promise<void> {
+  async setVisibleRange(range: VisibleTimeRange): Promise<void> {
+    if (!this._isReady) {
+      await new Promise<void>(resolve => this.onReady(resolve))
+    }
     const chart = this.getChart()
-    if (!chart) return Promise.resolve()
-    return chart.setVisibleRange({
+    if (!chart) return
+    await chart.setVisibleRange({
       from: range.from * 1000,
       to: range.to * 1000,
     })
