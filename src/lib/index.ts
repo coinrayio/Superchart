@@ -75,10 +75,13 @@ export type {
   StorageEntry,
   StudyTemplate,
   StudyTemplateMeta,
+  DrawingTemplate,
+  DrawingTemplateMeta,
   SavedIndicator,
   ChartPreferences,
 } from './types/storage'
 export { SYSTEM_STUDY_TEMPLATES } from './templates/systemStudyTemplates'
+export { SYSTEM_DRAWING_TEMPLATES } from './templates/systemDrawingTemplates'
 export {
   StorageConflictError,
   CHART_STATE_VERSION,

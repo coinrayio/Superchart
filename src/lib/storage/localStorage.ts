@@ -18,12 +18,19 @@ import {
   type StorageWriteResult,
   type StudyTemplate,
   type StudyTemplateMeta,
+  type DrawingTemplate,
+  type DrawingTemplateMeta,
 } from '../types/storage'
 import {
   SYSTEM_STUDY_TEMPLATES,
   findSystemStudyTemplate,
   isSystemStudyTemplate,
 } from '../templates/systemStudyTemplates'
+import {
+  listSystemDrawingTemplates,
+  findSystemDrawingTemplate,
+  isSystemDrawingTemplate,
+} from '../templates/systemDrawingTemplates'
 
 interface StoredBlob {
   state: ChartState
@@ -208,5 +215,75 @@ export class LocalStorageAdapter implements StorageAdapter {
       throw new Error(`Cannot delete system study template "${name}"`)
     }
     this.storage.removeItem(this.studyKey(name))
+  }
+
+  // ---- Drawing templates (Ticket 5) ----
+  // Per-tool keyed: a "default" trendLine template doesn't collide with
+  // a "default" fibSegment template. System templates merge in from the
+  // bundled list; user templates persist under their own prefix.
+
+  private drawingKey(toolName: string, name: string): string {
+    return `${this.prefix}drawing-template:${toolName}:${name}`
+  }
+
+  async listDrawingTemplates(toolName: string): Promise<DrawingTemplateMeta[]> {
+    const out: DrawingTemplateMeta[] = []
+    for (const t of listSystemDrawingTemplates(toolName)) {
+      out.push({ name: t.name, toolName: t.toolName, system: true, savedAt: t.savedAt })
+    }
+    const userPrefix = `${this.prefix}drawing-template:${toolName}:`
+    for (let i = 0; i < this.storage.length; i++) {
+      const fullKey = this.storage.key(i)
+      if (!fullKey || !fullKey.startsWith(userPrefix)) continue
+      const raw = this.storage.getItem(fullKey)
+      if (!raw) continue
+      try {
+        const tpl = JSON.parse(raw) as DrawingTemplate
+        if (!tpl || typeof tpl !== 'object' || !tpl.name || !tpl.toolName) continue
+        out.push({ name: tpl.name, toolName: tpl.toolName, savedAt: tpl.savedAt })
+      } catch {
+        // Corrupt entries don't break listing.
+      }
+    }
+    return out
+  }
+
+  async loadDrawingTemplate(toolName: string, name: string): Promise<DrawingTemplate | null> {
+    const raw = this.storage.getItem(this.drawingKey(toolName, name))
+    if (raw) {
+      try {
+        return JSON.parse(raw) as DrawingTemplate
+      } catch {
+        return null
+      }
+    }
+    return findSystemDrawingTemplate(toolName, name) ?? null
+  }
+
+  async saveDrawingTemplate(
+    toolName: string,
+    name: string,
+    template: DrawingTemplate
+  ): Promise<void> {
+    // Saving over a system name creates a user copy that shadows the
+    // system entry — same semantics as study templates.
+    const blob: DrawingTemplate = {
+      ...template,
+      name,
+      toolName,
+      savedAt: Date.now(),
+      system: false,
+    }
+    this.storage.setItem(this.drawingKey(toolName, name), JSON.stringify(blob))
+  }
+
+  async deleteDrawingTemplate(toolName: string, name: string): Promise<void> {
+    if (
+      isSystemDrawingTemplate(toolName, name) &&
+      !this.storage.getItem(this.drawingKey(toolName, name))
+    ) {
+      throw new Error(`Cannot delete system drawing template "${toolName}:${name}"`)
+    }
+    this.storage.removeItem(this.drawingKey(toolName, name))
   }
 }

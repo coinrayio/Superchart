@@ -25,6 +25,8 @@ import {
   type StorageWriteResult,
   type StudyTemplate,
   type StudyTemplateMeta,
+  type DrawingTemplate,
+  type DrawingTemplateMeta,
 } from '../types/storage'
 
 export interface HttpStorageAdapterOptions {
@@ -198,6 +200,73 @@ export class HttpStorageAdapter implements StorageAdapter {
     if (!res.ok && res.status !== 404) {
       // 403 indicates the server refused to delete a system template.
       throw new Error(`HttpStorageAdapter.deleteStudyTemplate failed: ${res.status} ${res.statusText}`)
+    }
+  }
+
+  // ---- Drawing templates (Ticket 5) ----
+  // Same parent-of-baseUrl pattern as study templates, plus a `:toolName`
+  // path segment so a "default" trendLine template doesn't collide with
+  // a "default" fibSegment template.
+
+  private drawingTemplatesBase(toolName: string): string {
+    const idx = this.baseUrl.lastIndexOf('/')
+    const root = idx > 0 ? this.baseUrl.slice(0, idx) : ''
+    return `${root}/drawing-templates/${encodeURIComponent(toolName)}`
+  }
+
+  private drawingTemplateUrl(toolName: string, name: string): string {
+    return `${this.drawingTemplatesBase(toolName)}/${encodeURIComponent(name)}`
+  }
+
+  async listDrawingTemplates(toolName: string): Promise<DrawingTemplateMeta[]> {
+    const res = await this._fetch(this.drawingTemplatesBase(toolName), {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...this.buildHeaders() },
+    })
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.listDrawingTemplates failed: ${res.status} ${res.statusText}`)
+    }
+    return (await res.json()) as DrawingTemplateMeta[]
+  }
+
+  async loadDrawingTemplate(toolName: string, name: string): Promise<DrawingTemplate | null> {
+    const res = await this._fetch(this.drawingTemplateUrl(toolName, name), {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...this.buildHeaders() },
+    })
+    if (res.status === 404) return null
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.loadDrawingTemplate failed: ${res.status} ${res.statusText}`)
+    }
+    return (await res.json()) as DrawingTemplate
+  }
+
+  async saveDrawingTemplate(
+    toolName: string,
+    name: string,
+    template: DrawingTemplate
+  ): Promise<void> {
+    const res = await this._fetch(this.drawingTemplateUrl(toolName, name), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...this.buildHeaders(),
+      },
+      body: JSON.stringify(template),
+    })
+    if (!res.ok) {
+      throw new Error(`HttpStorageAdapter.saveDrawingTemplate failed: ${res.status} ${res.statusText}`)
+    }
+  }
+
+  async deleteDrawingTemplate(toolName: string, name: string): Promise<void> {
+    const res = await this._fetch(this.drawingTemplateUrl(toolName, name), {
+      method: 'DELETE',
+      headers: this.buildHeaders(),
+    })
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`HttpStorageAdapter.deleteDrawingTemplate failed: ${res.status} ${res.statusText}`)
     }
   }
 }

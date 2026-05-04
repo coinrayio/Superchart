@@ -670,3 +670,140 @@ export function deleteStudyTemplate(name: string): { ok: true; existed: boolean 
   const result = db.prepare('DELETE FROM study_templates WHERE name = ?').run(name)
   return { ok: true, existed: result.changes > 0 }
 }
+
+// ----------------------------------------------------------------------------
+// Drawing templates (Ticket 5 of PERSISTENCE_ROADMAP.md)
+// Mirrors study templates but keyed by `(tool_name, name)` so a "default"
+// trendLine template doesn't collide with a "default" fibSegment template.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS drawing_templates (
+    tool_name  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (tool_name, name)
+  )
+`)
+
+export interface DrawingTemplate {
+  name: string
+  toolName: string
+  system?: boolean
+  savedAt?: number
+  properties?: Record<string, unknown>
+  figureStyles?: Record<string, Record<string, unknown>>
+}
+
+export interface DrawingTemplateMeta {
+  name: string
+  toolName: string
+  system?: boolean
+  savedAt?: number
+}
+
+/**
+ * Bundled system drawing templates. Mirrors
+ * src/lib/templates/systemDrawingTemplates.ts so HTTP-mode users see the
+ * same defaults as LocalStorageAdapter consumers. Keep both lists in sync.
+ */
+const SYSTEM_DRAWING_TEMPLATES: DrawingTemplate[] = [
+  {
+    name: 'Bullish trendline',
+    toolName: 'trendLine',
+    system: true,
+    properties: { lineColor: '#22c55e', lineWidth: 2 },
+  },
+  {
+    name: 'Bearish trendline',
+    toolName: 'trendLine',
+    system: true,
+    properties: { lineColor: '#ef4444', lineWidth: 2 },
+  },
+  {
+    name: 'Support line',
+    toolName: 'horizontalRayLine',
+    system: true,
+    properties: { lineColor: '#22c55e', lineStyle: 'dashed' },
+  },
+  {
+    name: 'Resistance line',
+    toolName: 'horizontalRayLine',
+    system: true,
+    properties: { lineColor: '#ef4444', lineStyle: 'dashed' },
+  },
+]
+
+export function isSystemDrawingTemplate(toolName: string, name: string): boolean {
+  return SYSTEM_DRAWING_TEMPLATES.some(t => t.toolName === toolName && t.name === name)
+}
+
+export function listDrawingTemplates(toolName: string): DrawingTemplateMeta[] {
+  const out: DrawingTemplateMeta[] = []
+  for (const t of SYSTEM_DRAWING_TEMPLATES) {
+    if (t.toolName !== toolName) continue
+    out.push({ name: t.name, toolName: t.toolName, system: true, savedAt: t.savedAt })
+  }
+  const rows = db.prepare(
+    'SELECT name, tool_name, updated_at FROM drawing_templates WHERE tool_name = ? ORDER BY updated_at DESC'
+  ).all(toolName) as Array<{ name: string; tool_name: string; updated_at: string }>
+  for (const row of rows) {
+    out.push({
+      name: row.name,
+      toolName: row.tool_name,
+      savedAt: new Date(row.updated_at).getTime(),
+    })
+  }
+  return out
+}
+
+export function loadDrawingTemplate(toolName: string, name: string): DrawingTemplate | null {
+  const row = db
+    .prepare('SELECT * FROM drawing_templates WHERE tool_name = ? AND name = ?')
+    .get(toolName, name) as { tool_name: string; name: string; body: string; updated_at: string } | undefined
+  if (row) {
+    const body = JSON.parse(row.body) as DrawingTemplate
+    return {
+      ...body,
+      name: row.name,
+      toolName: row.tool_name,
+      savedAt: new Date(row.updated_at).getTime(),
+      system: false,
+    }
+  }
+  return SYSTEM_DRAWING_TEMPLATES.find(t => t.toolName === toolName && t.name === name) ?? null
+}
+
+export function saveDrawingTemplate(
+  toolName: string,
+  name: string,
+  template: DrawingTemplate
+): { ok: true } | { ok: false; reason: 'system' } {
+  if (isSystemDrawingTemplate(toolName, name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const updatedAt = new Date().toISOString()
+  const body = JSON.stringify({
+    properties: template.properties,
+    figureStyles: template.figureStyles,
+  })
+  db.prepare(
+    'INSERT INTO drawing_templates (tool_name, name, body, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(tool_name, name) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at'
+  ).run(toolName, name, body, updatedAt)
+  return { ok: true }
+}
+
+export function deleteDrawingTemplate(
+  toolName: string,
+  name: string
+): { ok: true; existed: boolean } | { ok: false; reason: 'system' } {
+  if (isSystemDrawingTemplate(toolName, name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const result = db
+    .prepare('DELETE FROM drawing_templates WHERE tool_name = ? AND name = ?')
+    .run(toolName, name)
+  return { ok: true, existed: result.changes > 0 }
+}

@@ -14,6 +14,7 @@ import DragIcon from '../icons/drag'
 import { Icon } from '../icons'
 import { useChartStore } from '../../store/chartStoreContext'
 import { useChartState } from '../../hooks/useChartState'
+import { useDrawingTemplates } from '../../hooks/useDrawingTemplates'
 import type { ProOverlay, OverlayProperties } from '../../types/overlay'
 import type { DeepPartial } from 'klinecharts'
 import {
@@ -164,6 +165,25 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
     if (!overlay) return
     setLocalProps(prev => ({ ...prev, ...props }))
     modifyOverlayProperties(overlay.id, props)
+  }
+
+  // ---- Drawing templates (Ticket 5) ----
+  // The hook owns the feature-flag + adapter-capability gate; we just render
+  // the controls when `templates.enabled` is true.
+  const templates = useDrawingTemplates(overlay, applyProps)
+  const [showTemplatesEditor, setShowTemplatesEditor] = useState(false)
+
+  const handleApplyTemplate = async (name: string) => {
+    await templates.apply(name)
+    setShowTemplatesEditor(false)
+  }
+
+  const handleSaveAsTemplate = async () => {
+    if (!overlay) return
+    // eslint-disable-next-line no-alert
+    const name = window.prompt('Save drawing template as…', '')?.trim()
+    if (!name) return
+    await templates.save(name, { ...localProps } as DeepPartial<OverlayProperties>)
   }
 
   if (!overlay) return null
@@ -354,6 +374,81 @@ export function SettingFloating({ onClose, className }: FloatingProps) {
             <div className="cr-action-icon"><Icon name="settings" /></div>
           </div>
         </div>
+
+        {/* Drawing-template controls (Ticket 5) — visible when the
+            drawing_templates flag is on AND the active adapter implements
+            the four template methods. */}
+        {templates.enabled && (
+          <div className="cr-action" title="Drawing templates">
+            <div
+              className="cr-action-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowTemplatesEditor(prev => !prev)
+                setVisibleEditorKey(null)
+              }}
+            >
+              <div className="cr-action-icon"><Icon name="templates" /></div>
+            </div>
+            {showTemplatesEditor && (
+              <div
+                className="cr-editor"
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 6, minWidth: 200 }}
+              >
+                <div style={{ fontSize: 11, color: '#888' }}>Templates for {overlay.name}</div>
+                {templates.list.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#888' }}>(no templates yet)</div>
+                )}
+                {templates.list.map(t => (
+                  <div key={t.name} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => { void handleApplyTemplate(t.name) }}
+                      title={t.system ? 'System template' : 'User template'}
+                      style={{
+                        flex: 1, padding: '3px 6px', fontSize: 11,
+                        cursor: 'pointer', textAlign: 'left',
+                        background: 'transparent', color: '#fff',
+                        border: '1px solid #555', borderRadius: 3,
+                      }}
+                    >
+                      {t.name}{t.system ? ' (system)' : ''}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!!t.system}
+                      title={t.system ? 'System templates cannot be deleted' : 'Delete'}
+                      onClick={() => { void templates.remove(t.name) }}
+                      style={{
+                        padding: '3px 6px', fontSize: 11,
+                        cursor: t.system ? 'not-allowed' : 'pointer',
+                        background: 'transparent', color: '#aaa',
+                        border: '1px solid #555', borderRadius: 3,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { void handleSaveAsTemplate() }}
+                  style={{
+                    padding: '4px 8px', fontSize: 11, cursor: 'pointer',
+                    background: '#2a2a3a', color: '#fff',
+                    border: '1px solid #555', borderRadius: 3, marginTop: 4,
+                  }}
+                >
+                  Save as…
+                </button>
+                {templates.error && (
+                  <span style={{ color: '#f88', fontSize: 11 }}>{templates.error}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Lock/Unlock */}
         <div className="cr-action" title={overlay.lock ? 'Unlock' : 'Lock'}>

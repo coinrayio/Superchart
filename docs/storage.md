@@ -411,6 +411,97 @@ in `SuperchartOptions`.
 
 ---
 
+## Drawing templates (overlay-style presets)
+
+The mirror of study templates for **drawing overlays**: save a named set
+of properties + figure styles for a particular overlay tool, re-apply it
+to any overlay of the same type. Templates are **scoped per-tool** —
+a "default" template for `trendLine` is independent of "default" for
+`fibSegment`, so the composite key is `(toolName, name)`.
+
+```typescript
+interface StorageAdapter {
+  // …existing methods…
+  listDrawingTemplates?(toolName: string): Promise<DrawingTemplateMeta[]>
+  loadDrawingTemplate?(toolName: string, name: string): Promise<DrawingTemplate | null>
+  saveDrawingTemplate?(toolName: string, name: string, template: DrawingTemplate): Promise<void>
+  deleteDrawingTemplate?(toolName: string, name: string): Promise<void>
+}
+
+interface DrawingTemplate extends DrawingTemplateMeta {
+  properties?: DeepPartial<OverlayProperties>   // colours, line width, extend modes…
+  figureStyles?: Record<string, unknown>        // per-figure overrides (rare)
+}
+
+interface DrawingTemplateMeta {
+  name: string
+  toolName: string    // e.g. 'trendLine', 'fibSegment', 'horizontalRayLine'
+  system?: boolean    // true when bundled (read-only)
+  savedAt?: number
+}
+```
+
+### Bundled "system" templates
+
+Both bundled adapters ship a small list of read-only presets via
+`listDrawingTemplates` (Bullish/Bearish trendline, Support/Resistance
+horizontal rays). Custom adapters can include them too:
+
+```typescript
+import { SYSTEM_DRAWING_TEMPLATES } from 'superchart'
+```
+
+Save-over a system name creates a user copy that *shadows* the system
+one for subsequent loads. Delete on a system template throws (or
+returns `403` over HTTP).
+
+### REST contract
+
+```
+GET    {root}/drawing-templates/:toolName        → 200 [DrawingTemplateMeta…]
+GET    {root}/drawing-templates/:toolName/:name  → 200 DrawingTemplate | 404
+PUT    {root}/drawing-templates/:toolName/:name  body: DrawingTemplate
+                                                 → 204 | 403 (system name)
+DELETE {root}/drawing-templates/:toolName/:name  → 204 | 403 | 404
+```
+
+`{root}` is the parent of the `chart-state` baseUrl, same convention as
+study templates. With `baseUrl: '/api/chart-state'`, drawing templates
+live at `/api/drawing-templates/trendLine` etc.
+
+[`examples/server`](../examples/server) implements the contract on top
+of a `drawing_templates(tool_name, name, body, updated_at)` SQLite
+table with a composite `(tool_name, name)` primary key, plus a hardcoded
+mirror of `SYSTEM_DRAWING_TEMPLATES`. Keep both lists in sync when
+adding new system presets.
+
+### UI
+
+When the `drawing_templates` feature flag is on AND the active adapter
+implements all four methods, three overlay surfaces expose templates —
+all driven by a single `useDrawingTemplates` hook so they stay in sync:
+
+1. **Floating settings popup** (selected overlay) — a settings-icon
+   button opens an inline list of system + user templates for the
+   active tool, with per-row apply / × delete and a **Save as…**
+   button that snapshots the overlay's current properties.
+2. **Overlay settings modal** (double-click overlay or Settings from
+   the right-click menu) — a "Template" section at the top of the
+   Style tab with a select to pick & apply, plus **Save as…** /
+   **Delete** buttons.
+3. **Right-click context menu** — the existing **Template** submenu
+   becomes a live list of templates (each item applies on click) plus
+   **Save as…**. The whole submenu row is hidden when the feature is
+   off or the adapter doesn't support templates.
+
+Apply re-applies the template's `properties` through the same code path
+as a manual style edit (auto-save fires, multi-device merge applies),
+and any `figureStyles` are pushed through `chart.overrideOverlay`.
+
+Hide all three entry points with `disabledFeatures: ['drawing_templates']`.
+
+---
+
 ## ChartState shape
 
 ```typescript

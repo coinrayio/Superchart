@@ -41,6 +41,7 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
   const [, setTick] = useState(0)
   const [lastError, setLastError] = useState<string | null>(null)
   const [revision, setRevision] = useState<number | null>(null)
+  const [hudExpanded, setHudExpanded] = useState(false)
 
   // (Re)build the adapter when the mode changes.
   const adapter = useMemo<StorageAdapter>(() => {
@@ -182,34 +183,42 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
       <div style={{
         position: "absolute", top: 16, right: 16, zIndex: 9999,
         background: "rgba(20, 20, 35, 0.92)", color: "#ccc",
-        padding: "12px 14px", borderRadius: 6,
-        fontFamily: "monospace", fontSize: 12, lineHeight: 1.7,
-        minWidth: 280,
+        padding: "8px 10px", borderRadius: 6,
+        fontFamily: "monospace", fontSize: 11, lineHeight: 1.5,
+        width: 240,
         border: "1px solid #333",
       }}>
-        <div style={{fontWeight: "bold", color: "#fff", marginBottom: 6}}>
-          Persistence
+        <div
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            cursor: "pointer", marginBottom: 4,
+          }}
+          onClick={() => setHudExpanded(v => !v)}
+          title={hudExpanded ? "Collapse" : "Expand for help"}
+        >
+          <span style={{fontWeight: "bold", color: "#fff"}}>Persistence</span>
+          <span style={{color: "#888", fontSize: 10}}>{hudExpanded ? "▾" : "▸"}</span>
         </div>
         <div>Adapter: <span style={{color: "#fff"}}>{adapterMode}</span></div>
-        <div>Storage key: <span style={{color: "#fff"}}>{storageKey}</span></div>
-        <div>Revision: <span style={{color: "#7af"}}>{revision ?? "—"}</span></div>
+        <div>Key: <span style={{color: "#fff"}}>{storageKey}</span></div>
+        <div>Rev: <span style={{color: "#7af"}}>{revision ?? "—"}</span></div>
         {lastError && (
-          <div style={{color: "#f88", marginTop: 6}}>Last error: {lastError}</div>
+          <div style={{color: "#f88", marginTop: 4, wordBreak: "break-word"}}>{lastError}</div>
         )}
-        <div style={{marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4}}>
+        <div style={{marginTop: 6, display: "flex", flexWrap: "wrap", gap: 3}}>
           {[
-            {label: "Save now", onClick: handleSaveNow, title: "Force-save current chart state via superchart.saveState()"},
-            {label: "Reload", onClick: handleReloadFromAdapter, title: "Re-fetch and re-apply via superchart.loadState() (additive)"},
-            {label: "List saved", onClick: handleListSaved, title: "Alert all saved entries via superchart.listSavedStates()"},
-            {label: "Add transient", onClick: handleAddTransient, title: "Draw a rectangle with save: false — disappears on reload"},
-            {label: "Clear & reload", onClick: handleClear, title: "Delete saved record and reload the page"},
+            {label: "Save", onClick: handleSaveNow, title: "Force-save via superchart.saveState()"},
+            {label: "Reload", onClick: handleReloadFromAdapter, title: "Re-fetch via superchart.loadState() (additive)"},
+            {label: "List", onClick: handleListSaved, title: "Alert all entries via superchart.listSavedStates()"},
+            {label: "Transient", onClick: handleAddTransient, title: "Draw rect with save: false — disappears on reload"},
+            {label: "Clear", onClick: handleClear, title: "Delete saved record and reload"},
           ].map(b => (
             <button
               key={b.label}
               onClick={b.onClick}
               title={b.title}
               style={{
-                padding: "4px 10px", fontSize: 11, fontFamily: "monospace",
+                padding: "3px 7px", fontSize: 10, fontFamily: "monospace",
                 background: "#2a2a3a", color: "#fff", border: "1px solid #555",
                 borderRadius: 3, cursor: "pointer",
               }}
@@ -218,18 +227,22 @@ function PersistenceDemo({symbol, storageKey, adapterMode}: PersistenceArgs) {
             </button>
           ))}
         </div>
-        <div style={{marginTop: 8, fontSize: 11, color: "#888"}}>
-          Draw overlays to trigger auto-saves. "Add transient" creates an
-          overlay with <code>save:&nbsp;false</code> — it renders but
-          isn't persisted, so it vanishes on reload.
-        </div>
-        <div style={{marginTop: 8, fontSize: 11, color: "#888", borderTop: "1px solid #333", paddingTop: 8}}>
-          <strong style={{color: "#bbb"}}>Study templates:</strong> click the
-          indicator (fx) button in the period bar, add e.g. RSI, click its
-          settings cog → the modal shows a "Template" row with the bundled
-          system templates (RSI 14, MACD 12/26/9, …) plus any you save.
-          {adapterMode === "http" && " Requires examples/server running."}
-        </div>
+        {hudExpanded && (
+          <div style={{marginTop: 8, fontSize: 11, color: "#888", borderTop: "1px solid #333", paddingTop: 8, lineHeight: 1.6}}>
+            <p style={{margin: "0 0 6px 0"}}>
+              Draw overlays → auto-save fires. <em>Transient</em> uses <code>save: false</code>, vanishes on reload.
+            </p>
+            <p style={{margin: "0 0 6px 0"}}>
+              <strong style={{color: "#bbb"}}>Study templates:</strong> period bar fx button → add RSI → its settings cog shows the Template row.
+            </p>
+            <p style={{margin: 0}}>
+              <strong style={{color: "#bbb"}}>Drawing templates:</strong> draw a trendline / horizontal-ray, then (a) floating toolbar's settings-icon button, (b) double-click → Style tab top, or (c) right-click → Template submenu.
+            </p>
+            {adapterMode === "http" && (
+              <p style={{margin: "6px 0 0 0", color: "#aaa"}}>HTTP mode requires examples/server.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ import { PineScriptExecutor } from './runtime/executor.js'
 import { getAllIndicators, getIndicatorByName } from './db.js'
 import { handleChartStateRequest } from './chartStateRoutes.js'
 import { handleStudyTemplateRequest } from './studyTemplateRoutes.js'
+import { handleDrawingTemplateRequest } from './drawingTemplateRoutes.js'
 import type {
   WSMessage,
   CompileRequest,
@@ -73,6 +74,7 @@ const httpServer = createHttpServer((req, res) => {
       // Try each route prefix in turn — first handler that matches wins.
       if (await handleChartStateRequest(req, res)) return
       if (await handleStudyTemplateRequest(req, res)) return
+      if (await handleDrawingTemplateRequest(req, res)) return
       // Unmatched routes — return a small 404 so health-checkers / browser
       // probes get a clean response instead of hanging.
       res.statusCode = 404
@@ -91,6 +93,7 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`🚀 Script Execution Server running on ws://${HOST}:${PORT}`)
   console.log(`   Chart-state REST API on http://${HOST}:${PORT}/chart-state`)
   console.log(`   Study-templates REST API on http://${HOST}:${PORT}/study-templates`)
+  console.log(`   Drawing-templates REST API on http://${HOST}:${PORT}/drawing-templates/:toolName`)
 })
 
 wss.on('connection', (ws: WebSocket) => {

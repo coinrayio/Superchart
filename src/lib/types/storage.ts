@@ -50,6 +50,37 @@ export interface StorageEntry {
   period?: string
 }
 
+// ---- Drawing templates (Ticket 5 of PERSISTENCE_ROADMAP.md) ----
+
+/**
+ * Cheap metadata for a saved drawing-tool template — what to show in a
+ * list UI without loading the full template body. Returned by
+ * `StorageAdapter.listDrawingTemplates`.
+ */
+export interface DrawingTemplateMeta {
+  /** User-given template name. Unique per `(toolName, name)` pair. */
+  name: string
+  /** Drawing tool the template is for ("trendLine", "fibSegment", etc.). */
+  toolName: string
+  /** When `true`, this template ships with Superchart and cannot be deleted. */
+  system?: boolean
+  /** Last write timestamp (ms since epoch). */
+  savedAt?: number
+}
+
+/**
+ * Full drawing-tool template. Captures only the reusable styling — no
+ * `points`, `paneId`, or other chart-specific fields — so it can be applied
+ * to any new instance of `toolName`. Mirrors TradingView's drawing
+ * templates.
+ */
+export interface DrawingTemplate extends DrawingTemplateMeta {
+  /** Overlay-property overrides (lineColor, fontSize, …). */
+  properties?: Record<string, unknown>
+  /** Per-figure style overrides (for structural overlays like fibs). */
+  figureStyles?: Record<string, Record<string, unknown>>
+}
+
 // ---- Study templates (Ticket 4 of PERSISTENCE_ROADMAP.md) ----
 
 /**
@@ -217,6 +248,30 @@ export interface StorageAdapter {
    * for `system: true` templates — those are read-only.
    */
   deleteStudyTemplate?(name: string): Promise<void>
+
+  // ---- Drawing templates (Ticket 5) ----
+  // Same opt-in contract as study templates: implement the four methods
+  // to surface the UI; leave them undefined to hide it. Keyed by
+  // `(toolName, name)` so a "default" trendLine template doesn't collide
+  // with a "default" fibSegment template.
+
+  /**
+   * List drawing-tool templates available for `toolName`. Implementations
+   * typically merge bundled "system" templates with user-saved ones.
+   */
+  listDrawingTemplates?(toolName: string): Promise<DrawingTemplateMeta[]>
+
+  /** Load the full body of a single drawing-tool template by name. */
+  loadDrawingTemplate?(toolName: string, name: string): Promise<DrawingTemplate | null>
+
+  /** Save (insert or update) a drawing-tool template. */
+  saveDrawingTemplate?(toolName: string, name: string, template: DrawingTemplate): Promise<void>
+
+  /**
+   * Delete a user drawing-tool template. Implementations should reject
+   * for `system: true` templates.
+   */
+  deleteDrawingTemplate?(toolName: string, name: string): Promise<void>
 }
 
 /**
