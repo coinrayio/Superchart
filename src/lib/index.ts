@@ -54,6 +54,9 @@ export type {
 // ReplayEngine type — exported so consumers can type sc.replay
 export type { ReplayEngine } from 'klinecharts'
 
+export { isSetVisibleRangeError } from 'klinecharts'
+export type { SetVisibleRangeError, SetVisibleRangeErrorCode } from 'klinecharts'
+
 // Superchart-specific types
 export type {
   SuperchartOptions,

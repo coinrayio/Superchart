@@ -584,15 +584,10 @@ export default class Superchart implements SuperchartApi {
     return this._api?.getChart() ?? this._store.instanceApi()
   }
 
-  /**
-   * Set the visible range by scrolling and zooming so that the given
-   * time range (unix seconds) fills the chart viewport.
-   */
-  setVisibleRange(range: VisibleTimeRange): void {
+  setVisibleRange(range: VisibleTimeRange): Promise<void> {
     const chart = this.getChart()
-    if (!chart) return
-    // Convert seconds to milliseconds for klinecharts timestamps
-    chart.setVisibleRange({
+    if (!chart) return Promise.resolve()
+    return chart.setVisibleRange({
       from: range.from * 1000,
       to: range.to * 1000,
     })
