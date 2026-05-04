@@ -130,6 +130,16 @@ export interface ProOverlay extends Overlay {
  */
 export interface ProOverlayCreate extends OverlayCreate {
   properties?: DeepPartial<OverlayProperties>
+  /**
+   * Whether this overlay should be persisted via the StorageAdapter.
+   * Default `true`. Set to `false` for transient overlays (measurement
+   * tools, hover annotations, app-state-driven visualizations) that the
+   * consumer's app code is responsible for re-creating on reload.
+   *
+   * Mirrors TradingView's `disableSave` flag on `createMultipointShape` /
+   * `createShape`. See `docs/storage.md` for the full architectural divide.
+   */
+  save?: boolean
 }
 
 /**

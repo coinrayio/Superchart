@@ -4,12 +4,16 @@
  */
 
 import { WebSocketServer, type WebSocket } from 'ws'
+import { createServer as createHttpServer } from 'http'
 import { config } from 'dotenv'
 import { v4 as uuidv4 } from 'uuid'
 import { CoinrayClient } from './coinrayClient.js'
 import { PineScriptParser } from './runtime/parser.js'
 import { PineScriptExecutor } from './runtime/executor.js'
 import { getAllIndicators, getIndicatorByName } from './db.js'
+import { handleChartStateRequest } from './chartStateRoutes.js'
+import { handleStudyTemplateRequest } from './studyTemplateRoutes.js'
+import { handleDrawingTemplateRequest } from './drawingTemplateRoutes.js'
 import type {
   WSMessage,
   CompileRequest,
@@ -61,10 +65,36 @@ const coinrayClient = new CoinrayClient()
 const parser = new PineScriptParser()
 const executor = new PineScriptExecutor()
 
-// Create WebSocket server
-const wss = new WebSocketServer({ port: PORT, host: HOST })
-
-console.log(`🚀 Script Execution Server running on ws://${HOST}:${PORT}`)
+// Create combined HTTP + WebSocket server. The http.Server handles
+// chart-state REST endpoints (see chartStateRoutes.ts); the WebSocketServer
+// shares the same port for script-execution traffic.
+const httpServer = createHttpServer((req, res) => {
+  void (async () => {
+    try {
+      // Try each route prefix in turn — first handler that matches wins.
+      if (await handleChartStateRequest(req, res)) return
+      if (await handleStudyTemplateRequest(req, res)) return
+      if (await handleDrawingTemplateRequest(req, res)) return
+      // Unmatched routes — return a small 404 so health-checkers / browser
+      // probes get a clean response instead of hanging.
+      res.statusCode = 404
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: 'Not found' }))
+    } catch (err) {
+      console.error('HTTP handler error:', err)
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: 'Internal server error' }))
+    }
+  })()
+})
+const wss = new WebSocketServer({ server: httpServer })
+httpServer.listen(PORT, HOST, () => {
+  console.log(`🚀 Script Execution Server running on ws://${HOST}:${PORT}`)
+  console.log(`   Chart-state REST API on http://${HOST}:${PORT}/chart-state`)
+  console.log(`   Study-templates REST API on http://${HOST}:${PORT}/study-templates`)
+  console.log(`   Drawing-templates REST API on http://${HOST}:${PORT}/drawing-templates/:toolName`)
+})
 
 wss.on('connection', (ws: WebSocket) => {
   console.log('📡 Client connected')
