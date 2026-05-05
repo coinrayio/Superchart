@@ -596,6 +596,15 @@ export default class Superchart implements SuperchartApi {
     })
   }
 
+  async resetView(): Promise<void> {
+    if (!this._isReady) {
+      await new Promise<void>(resolve => this.onReady(resolve))
+    }
+    const chart = this.getChart()
+    if (!chart) return
+    await chart.resetView()
+  }
+
   /**
    * Access the underlying ReplayEngine directly.
    * Returns null before the chart has finished mounting.

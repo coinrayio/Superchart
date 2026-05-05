@@ -124,6 +124,30 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
     setMountKey(k => k + 1)
   }, [computeRange])
 
+  const handleResetView = useCallback(async () => {
+    const sc = superchartRef.current
+    if (!sc) return
+    setError(null)
+    try {
+      await sc.resetView()
+      setLastApplied(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  // Hotkey: alt+q → resetView (story-only; production uses alt+R outside Storybook)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey && e.key.toLowerCase() === "q") {
+        e.preventDefault()
+        void handleResetView()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => { window.removeEventListener("keydown", onKey) }
+  }, [handleResetView])
+
   const fmtTime = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 19).replace("T", " ")
 
   return (
@@ -182,6 +206,9 @@ function SyncDemo({symbol: initialSymbol, period: initialPeriod, theme}: SyncArg
           </button>
           <button style={buttonStyle} onClick={handleReload} disabled={pending}>
             reload
+          </button>
+          <button style={buttonStyle} onClick={handleResetView} disabled={pending} title="Alt+Q">
+            reset view
           </button>
         </div>
         {lastApplied && (
