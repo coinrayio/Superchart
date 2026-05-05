@@ -8,18 +8,30 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useChartStore } from '../../../store/chartStoreContext'
 import { useChartState } from '../../../store/chartStateStore'
+import { useDrawingTemplates } from '../../../hooks/useDrawingTemplates'
 import { Popup as GenericPopup } from '../generic'
 import { Icon } from '../../../widget/icons'
+import type { ProOverlay, OverlayProperties } from '../../../types/overlay'
+import type { DeepPartial } from 'klinecharts'
 
 const OverlayOptionsPopup = () => {
   const store = useChartStore()
+  const chartState = useChartState()
   const [hoverKey, setHoverKey] = useState<string | null>(null)
   const [hoverTop, setHoverTop] = useState(0)
   const popupRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const HIDE_DELAY = 200
 
-  const overlay = store.popupOverlay()
+  const overlay = store.popupOverlay() as ProOverlay | null
+
+  // Drawing templates (Ticket 5) — same shared hook as the floating popup
+  // and overlay settings modal. The "Template" submenu lists the available
+  // templates and pipes apply / save / delete through the hook.
+  const templates = useDrawingTemplates(overlay, (props) => {
+    if (!overlay) return
+    chartState.modifyOverlayProperties(overlay.id, props as DeepPartial<OverlayProperties>)
+  })
 
   const cancelHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
@@ -87,12 +99,13 @@ const OverlayOptionsPopup = () => {
     close()
   }
 
-  // Calculate submenu position
+  // Submenu is `position: absolute` inside the popupRef wrapper (which is
+  // `position: relative` below), so coords are popup-local — NOT viewport.
   const popupLeftPx = store.popupLeft() ?? 0
   const popupTopPx = store.popupTop() ?? 0
   const popupWidth = popupRef.current?.getBoundingClientRect().width ?? 220
-  const subLeft = popupLeftPx + popupWidth + 8
-  const subTop = popupTopPx + hoverTop
+  const subLeft = popupWidth + 8
+  const subTop = hoverTop
 
   return (
     <GenericPopup
@@ -102,18 +115,20 @@ const OverlayOptionsPopup = () => {
       onClose={close}
       className="overlay-options-popup"
     >
-      <div ref={popupRef} style={{ display: 'flex', flexDirection: 'row', gap: '1px' }}>
+      <div ref={popupRef} style={{ display: 'flex', flexDirection: 'row', gap: '1px', position: 'relative' }}>
         <table className="overlay-menu" role="menu">
           <tbody>
-            <tr onMouseEnter={(e) => onRowHover(e, 'template')} onMouseLeave={onRowLeave} onClick={() => { close() }}>
-              <td className="icon-cell"></td>
-              <td className="label">
-                <div className="flex-row row-content">
-                  <span>Template</span>
-                  <span className="inline-icon"><Icon name="arrowRight" /></span>
-                </div>
-              </td>
-            </tr>
+            {templates.enabled && (
+              <tr onMouseEnter={(e) => onRowHover(e, 'template')} onMouseLeave={onRowLeave}>
+                <td className="icon-cell"></td>
+                <td className="label">
+                  <div className="flex-row row-content">
+                    <span>Template</span>
+                    <span className="inline-icon"><Icon name="arrowRight" /></span>
+                  </div>
+                </td>
+              </tr>
+            )}
 
             <tr onMouseEnter={(e) => onRowHover(e, 'visual')} onMouseLeave={onRowLeave} onClick={() => { close() }}>
               <td className="icon-cell"><Icon name="layerStack" /></td>
@@ -214,8 +229,33 @@ const OverlayOptionsPopup = () => {
                 )}
                 {hoverKey === 'template' && (
                   <>
-                    <li onClick={() => { close() }}>Save as…</li>
-                    <li onClick={() => { close() }}>Apply default</li>
+                    {templates.list.length === 0 && (
+                      <li className="muted">(no templates yet)</li>
+                    )}
+                    {templates.list.map(t => (
+                      <li
+                        key={t.name}
+                        onClick={() => { void templates.apply(t.name); close() }}
+                        title={t.system ? 'System template' : 'User template'}
+                      >
+                        {t.name}{t.system ? ' (system)' : ''}
+                      </li>
+                    ))}
+                    <li
+                      onClick={async () => {
+                        // eslint-disable-next-line no-alert
+                        const name = window.prompt('Save drawing template as…', '')?.trim()
+                        if (name && overlay) {
+                          const props = overlay.getProperties
+                            ? overlay.getProperties(overlay.id)
+                            : (overlay.styles as Record<string, unknown> | undefined) ?? {}
+                          await templates.save(name, props as DeepPartial<OverlayProperties>)
+                        }
+                        close()
+                      }}
+                    >
+                      Save as…
+                    </li>
                   </>
                 )}
                 {hoverKey === 'visibility' && (

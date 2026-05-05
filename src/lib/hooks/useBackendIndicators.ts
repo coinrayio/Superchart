@@ -223,8 +223,9 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     const key = store.storageKey()
     if (!adapter) return
 
-    const state = await adapter.load(key)
-    if (!state) return
+    const record = await adapter.load(key)
+    if (!record) return
+    const { state, revision } = record
 
     const saved = {
       id: active.indicatorId,
@@ -245,7 +246,9 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     }
 
     state.savedAt = Date.now()
-    await adapter.save(key, state)
+    // Last-write-wins: backend-indicator metadata changes are rare and self-
+    // contained; merge-retry would add complexity without much benefit.
+    await adapter.save(key, state, revision)
   }, [])
 
   /**
@@ -256,14 +259,15 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     const key = store.storageKey()
     if (!adapter) return
 
-    const state = await adapter.load(key)
-    if (!state) return
+    const record = await adapter.load(key)
+    if (!record) return
+    const { state, revision } = record
 
     state.indicators = state.indicators.filter(
       (ind) => !(ind.name === indicatorName && ind.settings)
     )
     state.savedAt = Date.now()
-    await adapter.save(key, state)
+    await adapter.save(key, state, revision)
   }, [])
 
   /**
@@ -527,8 +531,9 @@ export function useBackendIndicators(): UseBackendIndicatorsReturn {
     const key = store.storageKey()
     if (!adapter) return
 
-    const state = await adapter.load(key)
-    if (!state) return
+    const record = await adapter.load(key)
+    if (!record) return
+    const { state } = record
 
     // Backend indicators have `settings` field but no `calcParams`
     const backendSaved = state.indicators.filter(

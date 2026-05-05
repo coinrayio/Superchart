@@ -5,7 +5,7 @@
  * but uses the StorageAdapter interface for pluggable persistence.
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type {
   Indicator,
   Nullable,
@@ -21,7 +21,8 @@ import { useChartStore } from '../store/chartStoreContext'
 import type { ChartState, SavedIndicator } from '../types/storage'
 import type { SavedOverlay, OverlayProperties, ProOverlay } from '../types/overlay'
 import { isOverlayVisibleForPeriod } from '../types/overlay'
-import { createEmptyChartState } from '../types/storage'
+import { createEmptyChartState, mergeChartStates, StorageConflictError } from '../types/storage'
+import type { StorageEntry } from '../types/storage'
 import { ctrlKeyedDown } from '../store/keyEventStore'
 import type { OverlayType } from '../store/chartStore'
 import { getDefaultForOverlay, setDefaultForOverlay, setOverlayDefaults } from '../store/overlayDefaultStyles'
@@ -88,32 +89,48 @@ export interface UseChartStateOptions {
   onOverlayDoubleClick?: (event: OverlayEvent<unknown>) => void
 }
 
+/** Maximum number of merge-retry attempts for a single mutation. */
+const SAVE_RETRY_LIMIT = 3
+
 /**
  * Hook for managing chart state persistence
  */
 export function useChartState(options: UseChartStateOptions = {}) {
   const store = useChartStore()
-  // Cache for current state to avoid excessive storage reads
+  // Cache for current state + revision to avoid excessive storage reads.
+  // Revision is null when no adapter is configured or no record exists yet.
   const stateCache = useRef<ChartState | null>(null)
+  const revisionCache = useRef<number | null>(null)
 
   /**
-   * Load state from storage
+   * Load state from storage (or in-memory cache when no adapter is configured).
+   * Always returns a non-null ChartState — synthesizes an empty state if none
+   * exists yet.
    */
   const loadState = useCallback(async (): Promise<ChartState> => {
     const adapter = store.storageAdapter()
     const key = store.storageKey()
 
     if (!adapter) {
-      return stateCache.current ?? createEmptyChartState()
+      stateCache.current = stateCache.current ?? createEmptyChartState()
+      return stateCache.current
     }
 
-    const state = await adapter.load(key)
-    stateCache.current = state ?? createEmptyChartState()
+    const record = await adapter.load(key)
+    if (record) {
+      stateCache.current = record.state
+      revisionCache.current = record.revision
+    } else {
+      stateCache.current = createEmptyChartState()
+      revisionCache.current = null
+    }
     return stateCache.current
   }, [])
 
   /**
-   * Save state to storage
+   * Save state to storage unconditionally (last-write-wins). Updates the
+   * revision cache. Used by `clearState` and as a fallback when no adapter
+   * is configured (cache-only).
    */
   const saveState = useCallback(
     async (state: ChartState): Promise<void> => {
@@ -125,33 +142,175 @@ export function useChartState(options: UseChartStateOptions = {}) {
 
       if (adapter) {
         state.savedAt = Date.now()
-        await adapter.save(key, state)
+        const result = await adapter.save(key, state)
+        revisionCache.current = result.revision
       }
     },
     []
   )
 
   /**
+   * Apply a mutation to the saved chart state with optimistic concurrency.
+   *
+   * Pattern: load → mutate → save with `expectedRevision`. If another writer
+   * advanced the revision in the meantime, the adapter throws
+   * `StorageConflictError`; we merge their state with ours via
+   * `mergeChartStates` (array-merge by id for indicators/overlays, last-
+   * write-wins on scalars), replay the mutation atop the merged base, and
+   * retry up to `SAVE_RETRY_LIMIT` times.
+   *
+   * On retry exhaustion the error is reported via `onStorageError` if
+   * configured, then re-thrown so calling sites that await can observe it.
+   */
+  const withMergeRetry = useCallback(
+    async (mutate: (state: ChartState) => ChartState): Promise<void> => {
+      const adapter = store.storageAdapter()
+      const key = store.storageKey()
+
+      // No adapter — pure in-memory: just apply and cache.
+      if (!adapter) {
+        const base = stateCache.current ?? createEmptyChartState()
+        stateCache.current = mutate(base)
+        store.setChartModified(true)
+        return
+      }
+
+      let lastError: unknown
+      for (let attempt = 0; attempt < SAVE_RETRY_LIMIT; attempt++) {
+        // Read fresh on every attempt so we always start from the latest known
+        // revision. Without this we'd loop with stale `revisionCache` after the
+        // first conflict.
+        const record = await adapter.load(key)
+        const base = record?.state ?? createEmptyChartState()
+        const expectedRevision = record?.revision
+
+        const next = mutate(base)
+        next.savedAt = Date.now()
+
+        try {
+          const result = await adapter.save(key, next, expectedRevision)
+          stateCache.current = next
+          revisionCache.current = result.revision
+          store.setChartModified(true)
+          return
+        } catch (err) {
+          lastError = err
+          if (err instanceof StorageConflictError) {
+            // Merge remote into our local result and retry. The next loop
+            // iteration will re-load (now matching the conflict's revision)
+            // and re-apply mutate to ensure idempotency.
+            stateCache.current = mergeChartStates(next, err.remoteState)
+            revisionCache.current = err.remoteRevision
+            continue
+          }
+          throw err
+        }
+      }
+
+      // Retries exhausted — surface to the consumer if they registered a handler
+      const onStorageError = store.onStorageError()
+      if (onStorageError && lastError instanceof Error) {
+        onStorageError(lastError)
+      }
+      throw lastError ?? new Error('Storage save failed after retries')
+    },
+    [store]
+  )
+
+  // Pending debounced-save timer. Held in a ref so React strict-mode
+  // double-invocation doesn't double-schedule.
+  const pendingSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /**
+   * Top-level entry point for every persistable mutation. Wraps
+   * `withMergeRetry` with two policy gates:
+   *
+   * - `auto_save_state` flag (off → cache-only, no adapter write)
+   * - `autoSaveDelay` (0 = save immediately, >0 = debounce: collapse rapid
+   *    mutations into one save after N ms idle)
+   *
+   * The cache is always updated synchronously so subsequent reads (and the
+   * eventual debounced flush) see the latest in-memory state.
+   */
+  const enqueueMutation: (mutate: (state: ChartState) => ChartState) => Promise<void> = useCallback(
+    async (mutate: (state: ChartState) => ChartState): Promise<void> => {
+      // Always apply to cache so reads are consistent regardless of save policy.
+      const base = stateCache.current ?? createEmptyChartState()
+      const next = mutate(base)
+      next.savedAt = Date.now()
+      stateCache.current = next
+      store.setChartModified(true)
+
+      // Auto-save off → caller is responsible for explicit superchart.saveState().
+      if (!store.isFeatureEnabled('auto_save_state')) {
+        return
+      }
+
+      const delay = store.autoSaveDelay()
+      if (delay <= 0) {
+        // Immediate path — preserves Ticket 1 semantics.
+        await withMergeRetry(mutate)
+        return
+      }
+
+      // Debounced path. Collapse pending mutations into one save after
+      // `delay` ms of idle. The flush uses the latest cache (so we
+      // capture every accumulated edit, not just this one) merged with
+      // whatever the remote currently has.
+      if (pendingSaveTimer.current) clearTimeout(pendingSaveTimer.current)
+      pendingSaveTimer.current = setTimeout(() => {
+        pendingSaveTimer.current = null
+        const flushSnapshot = stateCache.current
+        if (!flushSnapshot) return
+        // Errors are surfaced to onStorageError inside withMergeRetry; we
+        // intentionally don't await or rethrow here because the call that
+        // scheduled this timer has already returned.
+        void withMergeRetry((remote) => mergeChartStates(flushSnapshot, remote))
+      }, delay)
+    },
+    [withMergeRetry, store]
+  )
+
+  // Flush any pending debounced save when the component unmounts so we
+  // don't lose in-flight edits on navigation. Best-effort, fire-and-forget.
+  useEffect(() => {
+    return () => {
+      if (pendingSaveTimer.current) {
+        clearTimeout(pendingSaveTimer.current)
+        pendingSaveTimer.current = null
+        const adapter = store.storageAdapter()
+        const key = store.storageKey()
+        if (adapter && stateCache.current) {
+          // Last-write-wins on unmount: we'd rather clobber a concurrent
+          // edit than lose the user's work to a closing tab.
+          adapter.save(key, stateCache.current).catch(() => { /* nothing useful to do */ })
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /**
    * Sync indicator to storage
    */
   const syncIndicator = useCallback(
     async (indicator: Indicator, isStack?: boolean, paneOptions?: PaneOptions): Promise<void> => {
-      const state = await loadState()
       const saved = indicatorToSaved(indicator, isStack, paneOptions)
-
-      const existingIndex = state.indicators.findIndex(
-        (ind) => ind.name === indicator.name && ind.paneId === (paneOptions?.id ?? indicator.paneId)
-      )
-
-      if (existingIndex >= 0) {
-        state.indicators[existingIndex] = saved
-      } else {
-        state.indicators.push(saved)
-      }
-
-      await saveState(state)
+      const targetPaneId = paneOptions?.id ?? indicator.paneId
+      await enqueueMutation((state) => {
+        const next = { ...state, indicators: [...state.indicators] }
+        const existingIndex = next.indicators.findIndex(
+          (ind) => ind.name === indicator.name && ind.paneId === targetPaneId
+        )
+        if (existingIndex >= 0) {
+          next.indicators[existingIndex] = saved
+        } else {
+          next.indicators.push(saved)
+        }
+        return next
+      })
     },
-    [loadState, saveState]
+    [withMergeRetry]
   )
 
   /**
@@ -159,20 +318,19 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const syncOverlay = useCallback(
     async (overlay: Overlay, properties?: DeepPartial<OverlayProperties>): Promise<void> => {
-      const state = await loadState()
       const saved = overlayToSaved(overlay, store.getOverlayTimeframeVisibility, properties)
-
-      const existingIndex = state.overlays.findIndex((o) => o.id === overlay.id)
-
-      if (existingIndex >= 0) {
-        state.overlays[existingIndex] = saved
-      } else {
-        state.overlays.push(saved)
-      }
-
-      await saveState(state)
+      await enqueueMutation((state) => {
+        const next = { ...state, overlays: [...state.overlays] }
+        const existingIndex = next.overlays.findIndex((o) => o.id === overlay.id)
+        if (existingIndex >= 0) {
+          next.overlays[existingIndex] = saved
+        } else {
+          next.overlays.push(saved)
+        }
+        return next
+      })
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -237,15 +395,16 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const popOverlay = useCallback(
     async (id: string): Promise<void> => {
-      const state = await loadState()
-      state.overlays = state.overlays.filter((o) => o.id !== id)
-      await saveState(state)
+      await enqueueMutation((state) => ({
+        ...state,
+        overlays: state.overlays.filter((o) => o.id !== id),
+      }))
 
       store.instanceApi()?.removeOverlay({ id })
       // Clear selection so floating settings hides
       store.setSelectedOverlay(null)
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -253,19 +412,29 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const pushOverlay = useCallback(
     (
-      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
+      overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean },
       paneId?: string,
       redrawing = false
     ): Nullable<string> => {
       const chartInstance = store.instanceApi()
       if (!chartInstance) return null
 
+      // Per-overlay save opt-out (mirrors TV's `disableSave`). Default `true`.
+      // When false, this overlay is rendered but never written to the
+      // StorageAdapter, and won't restore on reload — useful for transient
+      // visualizations (measurement tools, hover annotations, app-state-
+      // driven things the consumer wants to manage themselves).
+      const shouldSave = overlay.save !== false
+
       // Merge default style template when creating new overlays (not restoring from saved state)
       const effectiveProperties = redrawing
         ? overlay.properties
         : { ...getDefaultForOverlay(overlay.name), ...overlay.properties }
 
-      const id = chartInstance.createOverlay({ ...overlay, paneId }) as Nullable<string>
+      // Strip our extension fields before passing to klinecharts — `save` and
+      // `properties` are Superchart-only and would be ignored at best.
+      const { save: _save, properties: _properties, ...overlayForKline } = overlay
+      const id = chartInstance.createOverlay({ ...overlayForKline, paneId }) as Nullable<string>
       if (!id) return null
 
       const createdOverlay = chartInstance.getOverlays({ id })[0]
@@ -278,13 +447,20 @@ export function useChartState(options: UseChartStateOptions = {}) {
         ;(createdOverlay as ProOverlay).setProperties(effectiveProperties, id)
       }
 
-      // Default right-click handler: Ctrl+click deletes, otherwise opens context menu
+      // Default right-click handler: Ctrl+click deletes, otherwise opens context menu.
+      // Gated by the `right_click_menu` feature flag — when disabled, we still
+      // suppress the browser context menu but skip the overlay popup so a
+      // consumer that wires `onOverlayRightClick` can take over without
+      // fighting our default handler.
       const handleRightClick = (event: OverlayEvent<unknown>): boolean => {
         if (event.preventDefault)
           event.preventDefault()
         if (ctrlKeyedDown()) {
           popOverlay(event.overlay.id)
           return true
+        }
+        if (!store.isFeatureEnabled('right_click_menu')) {
+          return false  // let the consumer handle, or do nothing
         }
         store.openOverlayPopup(
           event.pageX ?? 0,
@@ -317,14 +493,15 @@ export function useChartState(options: UseChartStateOptions = {}) {
         id: createdOverlay.id,
         ...(klineStyles ? { styles: klineStyles } : {}),
         onDrawEnd: (event) => {
-          // Don't sync temporary overlays like measure tool
-          if (!['measure'].includes(createdOverlay.name)) {
+          // Skip sync for: explicit opt-out (`save: false`) or transient
+          // overlays like the measure tool that are never persisted.
+          if (shouldSave && !['measure'].includes(createdOverlay.name)) {
             syncOverlay(event.overlay, effectiveProperties)
           }
           return false
         },
         onPressedMoveEnd: (event) => {
-          if (!['measure'].includes(createdOverlay.name)) {
+          if (shouldSave && !['measure'].includes(createdOverlay.name)) {
             syncOverlay(event.overlay, effectiveProperties)
           }
           return false
@@ -345,8 +522,8 @@ export function useChartState(options: UseChartStateOptions = {}) {
         onDoubleClick: createdOverlay.onDoubleClick ?? options.onOverlayDoubleClick ?? handleDoubleClick,
       })
 
-      // Sync to storage if not redrawing from saved state
-      if (!redrawing) {
+      // Sync to storage if not redrawing from saved state and save isn't opted out.
+      if (!redrawing && shouldSave) {
         syncOverlay(createdOverlay, effectiveProperties)
       }
 
@@ -360,22 +537,22 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const modifyOverlay = useCallback(
     async (id: string, modifyInfo: Partial<OverlayCreate>): Promise<void> => {
-      const state = await loadState()
-      state.overlays = state.overlays.map((overlay) => {
-        if (overlay.id === id) {
-          return {
-            ...overlay,
-            ...modifyInfo,
-            paneId: modifyInfo.paneId ?? overlay.paneId,
-          } as SavedOverlay
-        }
-        return overlay
-      })
-      await saveState(state)
+      await enqueueMutation((state) => ({
+        ...state,
+        overlays: state.overlays.map((overlay) =>
+          overlay.id === id
+            ? ({
+                ...overlay,
+                ...modifyInfo,
+                paneId: modifyInfo.paneId ?? overlay.paneId,
+              } as SavedOverlay)
+            : overlay
+        ),
+      }))
 
       store.instanceApi()?.overrideOverlay({ ...modifyInfo, id })
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -409,23 +586,26 @@ export function useChartState(options: UseChartStateOptions = {}) {
         setDefaultForOverlay(overlayName, properties)
       }
 
-      // 3. Persist to storage ASYNC
-      const state = await loadState()
-      state.overlays = state.overlays.map((overlay) => {
-        if (overlay.id === id) {
-          return {
-            ...overlay,
-            properties: { ...overlay.properties, ...properties },
+      // 3. Persist to storage ASYNC (with merge-retry)
+      await enqueueMutation((state) => {
+        const next = {
+          ...state,
+          overlays: state.overlays.map((overlay) =>
+            overlay.id === id
+              ? { ...overlay, properties: { ...overlay.properties, ...properties } }
+              : overlay
+          ),
+        }
+        if (overlayName) {
+          next.overlayDefaults = {
+            ...state.overlayDefaults,
+            [overlayName]: getDefaultForOverlay(overlayName),
           }
         }
-        return overlay
+        return next
       })
-      if (overlayName) {
-        state.overlayDefaults = { ...state.overlayDefaults, [overlayName]: getDefaultForOverlay(overlayName) }
-      }
-      await saveState(state)
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -437,20 +617,17 @@ export function useChartState(options: UseChartStateOptions = {}) {
       // Apply visual change synchronously
       store.instanceApi()?.overrideOverlay({ id, figureStyles })
 
-      // Persist to storage
-      const state = await loadState()
-      state.overlays = state.overlays.map((overlay) => {
-        if (overlay.id === id) {
-          return {
-            ...overlay,
-            figureStyles: { ...overlay.figureStyles, ...figureStyles },
-          }
-        }
-        return overlay
-      })
-      await saveState(state)
+      // Persist to storage (with merge-retry)
+      await enqueueMutation((state) => ({
+        ...state,
+        overlays: state.overlays.map((overlay) =>
+          overlay.id === id
+            ? { ...overlay, figureStyles: { ...overlay.figureStyles, ...figureStyles } }
+            : overlay
+        ),
+      }))
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -458,15 +635,16 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const popIndicator = useCallback(
     async (name: string, paneId?: string): Promise<void> => {
-      const state = await loadState()
-      state.indicators = state.indicators.filter(
-        (ind) => !(ind.name === name && ind.paneId === paneId)
-      )
-      await saveState(state)
+      await enqueueMutation((state) => ({
+        ...state,
+        indicators: state.indicators.filter(
+          (ind) => !(ind.name === name && ind.paneId === paneId)
+        ),
+      }))
 
       store.instanceApi()?.removeIndicator({ name, paneId })
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -474,18 +652,16 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const modifyIndicator = useCallback(
     async (name: string, paneId: string, calcParams: unknown[]): Promise<void> => {
-      const state = await loadState()
-      state.indicators = state.indicators.map((ind) => {
-        if (ind.name === name && ind.paneId === paneId) {
-          return { ...ind, calcParams }
-        }
-        return ind
-      })
-      await saveState(state)
+      await enqueueMutation((state) => ({
+        ...state,
+        indicators: state.indicators.map((ind) =>
+          ind.name === name && ind.paneId === paneId ? { ...ind, calcParams } : ind
+        ),
+      }))
 
       store.instanceApi()?.overrideIndicator({ name, calcParams, paneId })
     },
-    [loadState, saveState]
+    [enqueueMutation, store]
   )
 
   /**
@@ -631,12 +807,48 @@ export function useChartState(options: UseChartStateOptions = {}) {
    */
   const clearState = useCallback(async (): Promise<void> => {
     stateCache.current = createEmptyChartState()
+    revisionCache.current = null
     const adapter = store.storageAdapter()
     const key = store.storageKey()
     if (adapter) {
       await adapter.delete(key)
     }
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Public imperative API (Ticket 2). Exposed verbatim by Superchart.saveState/
+  // loadState/clearState/listSavedStates. Keep the names verbose enough to
+  // distinguish "force-save current state" from the per-mutation `saveState`
+  // helper above.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Force-save the current chart state to the StorageAdapter (last-write-wins,
+   * no merge-retry). For consumer code that wants explicit control — e.g. a
+   * "Save" button, pre-navigation flush, or when `auto_save_state` is off.
+   */
+  const saveStateExplicit = useCallback(async (): Promise<void> => {
+    // Cancel any debounced save so we don't write twice with conflicting
+    // expected revisions.
+    if (pendingSaveTimer.current) {
+      clearTimeout(pendingSaveTimer.current)
+      pendingSaveTimer.current = null
+    }
+    const state = stateCache.current ?? (await loadState())
+    await saveState(state)
+  }, [loadState, saveState])
+
+  /**
+   * Passthrough to `StorageAdapter.list()`. Returns `[]` when no adapter is
+   * configured or the adapter doesn't implement `list`. Used by the multi-
+   * chart browser (Ticket 7) but exposed now so consumers can build their
+   * own list UIs immediately.
+   */
+  const listSavedStates = useCallback(async (prefix?: string): Promise<StorageEntry[]> => {
+    const adapter = store.storageAdapter()
+    if (!adapter || !adapter.list) return []
+    return adapter.list(prefix)
+  }, [store])
 
   return {
     // Indicator methods
@@ -655,10 +867,14 @@ export function useChartState(options: UseChartStateOptions = {}) {
     modifyOverlayFigureStyles,
     popOverlay,
 
-    // State management
+    // State management (internal — used by mutations)
     loadState,
     saveState,
     restoreChartState,
     clearState,
+
+    // Public imperative API (Ticket 2)
+    saveStateExplicit,
+    listSavedStates,
   }
 }

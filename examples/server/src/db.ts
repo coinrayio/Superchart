@@ -419,3 +419,391 @@ export function getAllIndicators(): DbIndicator[] {
 export function getIndicatorByName(name: string): DbIndicator | undefined {
   return db.prepare('SELECT * FROM indicators WHERE name = ?').get(name) as DbIndicator | undefined
 }
+
+// ----------------------------------------------------------------------------
+// Chart state — per-key blobs with optimistic-concurrency revision.
+// Mirrors Superchart's StorageAdapter contract; see PERSISTENCE_ROADMAP.md.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chart_state (
+    key        TEXT PRIMARY KEY,
+    state      TEXT NOT NULL,
+    revision   INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    symbol     TEXT,
+    period     TEXT
+  )
+`)
+
+interface ChartStateRow {
+  key: string
+  state: string
+  revision: number
+  updated_at: string
+  symbol: string | null
+  period: string | null
+}
+
+export interface ChartStateRecord {
+  state: unknown
+  revision: number
+}
+
+export interface ChartStateEntry {
+  key: string
+  revision: number
+  savedAt: number
+  symbol?: string
+  period?: string
+}
+
+export function loadChartState(key: string): ChartStateRecord | null {
+  const row = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+    | { state: string; revision: number }
+    | undefined
+  if (!row) return null
+  return { state: JSON.parse(row.state), revision: row.revision }
+}
+
+/**
+ * Save chart state with optional optimistic-concurrency check.
+ *
+ * Returns:
+ *   { ok: true, revision }                     on success
+ *   { ok: false, conflict: true, current }     when expectedRevision is stale
+ */
+export function saveChartState(
+  key: string,
+  state: unknown,
+  expectedRevision: number | undefined,
+  symbol?: string,
+  period?: string
+):
+  | { ok: true; revision: number }
+  | { ok: false; conflict: true; current: ChartStateRecord } {
+  const current = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+    | { state: string; revision: number }
+    | undefined
+  const currentRevision = current?.revision ?? 0
+
+  if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+    return {
+      ok: false,
+      conflict: true,
+      current: {
+        state: current ? JSON.parse(current.state) : state,
+        revision: currentRevision,
+      },
+    }
+  }
+
+  const nextRevision = currentRevision + 1
+  const updatedAt = new Date().toISOString()
+  const stateJson = JSON.stringify(state)
+
+  if (current) {
+    // Affected-row check guards against a concurrent writer that bumped revision
+    // between our SELECT and UPDATE. better-sqlite3 is synchronous so this is
+    // unlikely under normal load, but cheap insurance.
+    const result = db
+      .prepare('UPDATE chart_state SET state = ?, revision = ?, updated_at = ?, symbol = ?, period = ? WHERE key = ? AND revision = ?')
+      .run(stateJson, nextRevision, updatedAt, symbol ?? null, period ?? null, key, currentRevision)
+    if (result.changes !== 1) {
+      // Race: someone else wrote between SELECT and UPDATE. Surface as conflict.
+      const fresh = db.prepare('SELECT state, revision FROM chart_state WHERE key = ?').get(key) as
+        | { state: string; revision: number }
+      return {
+        ok: false,
+        conflict: true,
+        current: { state: JSON.parse(fresh.state), revision: fresh.revision },
+      }
+    }
+  } else {
+    db.prepare(
+      'INSERT INTO chart_state (key, state, revision, updated_at, symbol, period) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(key, stateJson, nextRevision, updatedAt, symbol ?? null, period ?? null)
+  }
+
+  return { ok: true, revision: nextRevision }
+}
+
+export function deleteChartState(key: string): boolean {
+  const result = db.prepare('DELETE FROM chart_state WHERE key = ?').run(key)
+  return result.changes > 0
+}
+
+export function listChartStates(prefix?: string): ChartStateEntry[] {
+  const rows = (prefix
+    ? db.prepare('SELECT * FROM chart_state WHERE key LIKE ? ORDER BY updated_at DESC').all(`${prefix}%`)
+    : db.prepare('SELECT * FROM chart_state ORDER BY updated_at DESC').all()
+  ) as ChartStateRow[]
+
+  return rows.map((row) => ({
+    key: row.key,
+    revision: row.revision,
+    savedAt: new Date(row.updated_at).getTime(),
+    symbol: row.symbol ?? undefined,
+    period: row.period ?? undefined,
+  }))
+}
+
+// ----------------------------------------------------------------------------
+// Study templates (Ticket 4 of PERSISTENCE_ROADMAP.md)
+// User templates live in SQLite. System templates are bundled in code below
+// and merged into list/load responses; PUT/DELETE on a system name is
+// rejected with 403 by the route handler.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS study_templates (
+    name           TEXT PRIMARY KEY,
+    indicator_name TEXT NOT NULL,
+    body           TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+  )
+`)
+
+interface StudyTemplateRow {
+  name: string
+  indicator_name: string
+  body: string
+  updated_at: string
+}
+
+export interface StudyTemplate {
+  name: string
+  indicatorName: string
+  system?: boolean
+  savedAt?: number
+  calcParams?: unknown[]
+  settings?: Record<string, unknown>
+  styles?: Record<string, unknown>
+}
+
+export interface StudyTemplateMeta {
+  name: string
+  indicatorName: string
+  system?: boolean
+  savedAt?: number
+}
+
+/**
+ * Bundled system templates. Mirrors src/lib/templates/systemStudyTemplates.ts
+ * — the server reports them in list/load so HTTP-mode consumers see the
+ * same defaults as LocalStorageAdapter consumers. Keep this list in sync
+ * with the client-side bundle.
+ */
+const SYSTEM_STUDY_TEMPLATES: StudyTemplate[] = [
+  { name: 'RSI 14', indicatorName: 'RSI', calcParams: [14], system: true },
+  { name: 'MACD 12/26/9', indicatorName: 'MACD', calcParams: [12, 26, 9], system: true },
+  { name: 'EMA 50', indicatorName: 'EMA', calcParams: [50], system: true },
+  { name: 'EMA 200', indicatorName: 'EMA', calcParams: [200], system: true },
+  { name: 'BOLL 20', indicatorName: 'BOLL', calcParams: [20, 2], system: true },
+]
+
+export function isSystemStudyTemplate(name: string): boolean {
+  return SYSTEM_STUDY_TEMPLATES.some(t => t.name === name)
+}
+
+export function listStudyTemplates(indicatorName?: string): StudyTemplateMeta[] {
+  const out: StudyTemplateMeta[] = []
+  // System first, then user — matches the LocalStorageAdapter ordering.
+  for (const t of SYSTEM_STUDY_TEMPLATES) {
+    if (indicatorName && t.indicatorName !== indicatorName) continue
+    out.push({ name: t.name, indicatorName: t.indicatorName, system: true, savedAt: t.savedAt })
+  }
+  const rows = (indicatorName
+    ? db.prepare('SELECT name, indicator_name, updated_at FROM study_templates WHERE indicator_name = ? ORDER BY updated_at DESC').all(indicatorName)
+    : db.prepare('SELECT name, indicator_name, updated_at FROM study_templates ORDER BY updated_at DESC').all()
+  ) as Array<{ name: string; indicator_name: string; updated_at: string }>
+  for (const row of rows) {
+    out.push({
+      name: row.name,
+      indicatorName: row.indicator_name,
+      savedAt: new Date(row.updated_at).getTime(),
+    })
+  }
+  return out
+}
+
+export function loadStudyTemplate(name: string): StudyTemplate | null {
+  // User copy wins, allowing a user to shadow a system template name.
+  const row = db.prepare('SELECT * FROM study_templates WHERE name = ?').get(name) as StudyTemplateRow | undefined
+  if (row) {
+    const body = JSON.parse(row.body) as StudyTemplate
+    return {
+      ...body,
+      name: row.name,
+      indicatorName: row.indicator_name,
+      savedAt: new Date(row.updated_at).getTime(),
+      system: false,
+    }
+  }
+  const systemMatch = SYSTEM_STUDY_TEMPLATES.find(t => t.name === name)
+  return systemMatch ?? null
+}
+
+/** Save (insert or update). Rejects when the name belongs to a system template. */
+export function saveStudyTemplate(name: string, template: StudyTemplate): { ok: true } | { ok: false; reason: 'system' } {
+  if (isSystemStudyTemplate(name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const updatedAt = new Date().toISOString()
+  const body = JSON.stringify({
+    calcParams: template.calcParams,
+    settings: template.settings,
+    styles: template.styles,
+  })
+  db.prepare(
+    'INSERT INTO study_templates (name, indicator_name, body, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(name) DO UPDATE SET indicator_name = excluded.indicator_name, body = excluded.body, updated_at = excluded.updated_at'
+  ).run(name, template.indicatorName, body, updatedAt)
+  return { ok: true }
+}
+
+/** Delete a user template. Returns false when the name is a system template (caller should 403). */
+export function deleteStudyTemplate(name: string): { ok: true; existed: boolean } | { ok: false; reason: 'system' } {
+  if (isSystemStudyTemplate(name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const result = db.prepare('DELETE FROM study_templates WHERE name = ?').run(name)
+  return { ok: true, existed: result.changes > 0 }
+}
+
+// ----------------------------------------------------------------------------
+// Drawing templates (Ticket 5 of PERSISTENCE_ROADMAP.md)
+// Mirrors study templates but keyed by `(tool_name, name)` so a "default"
+// trendLine template doesn't collide with a "default" fibSegment template.
+// ----------------------------------------------------------------------------
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS drawing_templates (
+    tool_name  TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (tool_name, name)
+  )
+`)
+
+export interface DrawingTemplate {
+  name: string
+  toolName: string
+  system?: boolean
+  savedAt?: number
+  properties?: Record<string, unknown>
+  figureStyles?: Record<string, Record<string, unknown>>
+}
+
+export interface DrawingTemplateMeta {
+  name: string
+  toolName: string
+  system?: boolean
+  savedAt?: number
+}
+
+/**
+ * Bundled system drawing templates. Mirrors
+ * src/lib/templates/systemDrawingTemplates.ts so HTTP-mode users see the
+ * same defaults as LocalStorageAdapter consumers. Keep both lists in sync.
+ */
+const SYSTEM_DRAWING_TEMPLATES: DrawingTemplate[] = [
+  {
+    name: 'Bullish trendline',
+    toolName: 'trendLine',
+    system: true,
+    properties: { lineColor: '#22c55e', lineWidth: 2 },
+  },
+  {
+    name: 'Bearish trendline',
+    toolName: 'trendLine',
+    system: true,
+    properties: { lineColor: '#ef4444', lineWidth: 2 },
+  },
+  {
+    name: 'Support line',
+    toolName: 'horizontalRayLine',
+    system: true,
+    properties: { lineColor: '#22c55e', lineStyle: 'dashed' },
+  },
+  {
+    name: 'Resistance line',
+    toolName: 'horizontalRayLine',
+    system: true,
+    properties: { lineColor: '#ef4444', lineStyle: 'dashed' },
+  },
+]
+
+export function isSystemDrawingTemplate(toolName: string, name: string): boolean {
+  return SYSTEM_DRAWING_TEMPLATES.some(t => t.toolName === toolName && t.name === name)
+}
+
+export function listDrawingTemplates(toolName: string): DrawingTemplateMeta[] {
+  const out: DrawingTemplateMeta[] = []
+  for (const t of SYSTEM_DRAWING_TEMPLATES) {
+    if (t.toolName !== toolName) continue
+    out.push({ name: t.name, toolName: t.toolName, system: true, savedAt: t.savedAt })
+  }
+  const rows = db.prepare(
+    'SELECT name, tool_name, updated_at FROM drawing_templates WHERE tool_name = ? ORDER BY updated_at DESC'
+  ).all(toolName) as Array<{ name: string; tool_name: string; updated_at: string }>
+  for (const row of rows) {
+    out.push({
+      name: row.name,
+      toolName: row.tool_name,
+      savedAt: new Date(row.updated_at).getTime(),
+    })
+  }
+  return out
+}
+
+export function loadDrawingTemplate(toolName: string, name: string): DrawingTemplate | null {
+  const row = db
+    .prepare('SELECT * FROM drawing_templates WHERE tool_name = ? AND name = ?')
+    .get(toolName, name) as { tool_name: string; name: string; body: string; updated_at: string } | undefined
+  if (row) {
+    const body = JSON.parse(row.body) as DrawingTemplate
+    return {
+      ...body,
+      name: row.name,
+      toolName: row.tool_name,
+      savedAt: new Date(row.updated_at).getTime(),
+      system: false,
+    }
+  }
+  return SYSTEM_DRAWING_TEMPLATES.find(t => t.toolName === toolName && t.name === name) ?? null
+}
+
+export function saveDrawingTemplate(
+  toolName: string,
+  name: string,
+  template: DrawingTemplate
+): { ok: true } | { ok: false; reason: 'system' } {
+  if (isSystemDrawingTemplate(toolName, name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const updatedAt = new Date().toISOString()
+  const body = JSON.stringify({
+    properties: template.properties,
+    figureStyles: template.figureStyles,
+  })
+  db.prepare(
+    'INSERT INTO drawing_templates (tool_name, name, body, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(tool_name, name) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at'
+  ).run(toolName, name, body, updatedAt)
+  return { ok: true }
+}
+
+export function deleteDrawingTemplate(
+  toolName: string,
+  name: string
+): { ok: true; existed: boolean } | { ok: false; reason: 'system' } {
+  if (isSystemDrawingTemplate(toolName, name)) {
+    return { ok: false, reason: 'system' }
+  }
+  const result = db
+    .prepare('DELETE FROM drawing_templates WHERE tool_name = ? AND name = ?')
+    .run(toolName, name)
+  return { ok: true, existed: result.changes > 0 }
+}

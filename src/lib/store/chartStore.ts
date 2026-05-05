@@ -17,6 +17,8 @@ import type { Chart, DeepPartial, Nullable, Styles, Overlay } from 'klinecharts'
 import type { Period, SymbolInfo } from '../types/chart'
 import type { StorageAdapter } from '../types/storage'
 import type { IndicatorProvider } from '../types/indicator'
+import type { FeatureFlag } from '../features/types'
+import { FEATURE_DEFAULTS } from '../features/defaults'
 import type { ScriptProvider } from '../types/script'
 import type { TimeframeVisibility } from '../types/overlay'
 import { getScreenSize } from '../helpers'
@@ -24,6 +26,14 @@ import { getScreenSize } from '../helpers'
 // Simple observable store implementation
 type Listener<T> = (value: T) => void
 
+/**
+ * Caveat: `set()` interprets any function argument as an updater
+ * `(prev) => next`. If you need to store a callback whose type is itself a
+ * function (e.g. an event handler), wrap it in an object holder before
+ * passing in — see `setOnStorageError` below for the pattern. Otherwise the
+ * setter will invoke your callback at registration time with the previous
+ * value as its argument.
+ */
 function createSignal<T>(initialValue: T): [() => T, (value: T | ((prev: T) => T)) => void, (listener: Listener<T>) => () => void] {
   let value = initialValue
   const listeners = new Set<Listener<T>>()
@@ -156,6 +166,22 @@ export interface ChartStore {
   setStorageKey: (value: string) => void
   subscribeStorageKey: (listener: Listener<string>) => () => void
 
+  /** Optional consumer-supplied error handler for storage failures (e.g. retry exhaustion). */
+  onStorageError: () => Nullable<(err: Error) => void>
+  setOnStorageError: (value: Nullable<(err: Error) => void>) => void
+
+  /** Auto-save debounce in ms. 0 = save on every mutation (default); >0 = collapse mutations within the window into one save. */
+  autoSaveDelay: () => number
+  setAutoSaveDelay: (value: number) => void
+
+  // Feature flags (Ticket 3) — see src/lib/features/types.ts for the catalog.
+  /** True if the named feature is currently enabled for this instance. */
+  isFeatureEnabled: (flag: FeatureFlag) => boolean
+  /** Toggle a feature at runtime. Triggers re-render in components that subscribe via useFeature(). */
+  setFeatureEnabled: (flag: FeatureFlag, enabled: boolean) => void
+  /** Subscribe to feature-set changes. Listener fires after every setFeatureEnabled call (with the full flag→bool map). */
+  subscribeFeatures: (listener: Listener<Record<FeatureFlag, boolean>>) => () => void
+
   // Backend indicator provider
   indicatorProvider: () => Nullable<IndicatorProvider>
   setIndicatorProvider: (value: Nullable<IndicatorProvider>) => void
@@ -276,6 +302,44 @@ export function createChartStore(): ChartStore {
   const [selectedOverlayPosition, setSelectedOverlayPosition, subscribeSelectedOverlayPosition] = createSignal<{ x: number; y: number }>({ x: 0, y: 0 })
   const [storageAdapter, setStorageAdapter, subscribeStorageAdapter] = createSignal<Nullable<StorageAdapter>>(null)
   const [storageKey, setStorageKey, subscribeStorageKey] = createSignal<string>('')
+  // Wrap the callback in a holder object: createSignal's setter treats raw
+  // function values as state-updaters and invokes them with the previous value,
+  // which would call the consumer's error handler with `null` at registration
+  // time. The wrapper keeps the function opaque to the signal machinery.
+  const [onStorageErrorHolder, setOnStorageErrorHolder] = createSignal<{ fn: Nullable<(err: Error) => void> }>({ fn: null })
+  const onStorageError = () => onStorageErrorHolder().fn
+  const setOnStorageError = (value: Nullable<(err: Error) => void>) => {
+    setOnStorageErrorHolder({ fn: value })
+  }
+  const [autoSaveDelay, setAutoSaveDelay] = createSignal<number>(0)
+
+  // Feature flags — kept as a Map so we can fire one subscriber call after
+  // any per-flag toggle and let consumers re-derive their booleans. The
+  // initial value is a copy of FEATURE_DEFAULTS; constructor-time
+  // overrides (`enabledFeatures` / `disabledFeatures`) are applied by
+  // Superchart.ts via setFeatureEnabled().
+  const featureMap = new Map<FeatureFlag, boolean>(
+    Object.entries(FEATURE_DEFAULTS) as Array<[FeatureFlag, boolean]>
+  )
+  const featureListeners = new Set<Listener<Record<FeatureFlag, boolean>>>()
+  const isFeatureEnabled = (flag: FeatureFlag): boolean => featureMap.get(flag) ?? false
+  const featureSnapshot = (): Record<FeatureFlag, boolean> => {
+    const obj = {} as Record<FeatureFlag, boolean>
+    featureMap.forEach((v, k) => { obj[k] = v })
+    return obj
+  }
+  const setFeatureEnabled = (flag: FeatureFlag, enabled: boolean): void => {
+    const prev = featureMap.get(flag) ?? false
+    if (prev === enabled) return
+    featureMap.set(flag, enabled)
+    const snap = featureSnapshot()
+    featureListeners.forEach(l => l(snap))
+  }
+  const subscribeFeatures = (listener: Listener<Record<FeatureFlag, boolean>>): (() => void) => {
+    featureListeners.add(listener)
+    return () => featureListeners.delete(listener)
+  }
+
   const [indicatorProvider, setIndicatorProvider, subscribeIndicatorProvider] = createSignal<Nullable<IndicatorProvider>>(null)
   const [scriptProvider, setScriptProvider, subscribeScriptProvider] = createSignal<Nullable<ScriptProvider>>(null)
   const [chartModified, setChartModified, subscribeChartModified] = createSignal<boolean>(false)
@@ -345,6 +409,13 @@ export function createChartStore(): ChartStore {
     setSelectedOverlayPosition({ x: 0, y: 0 })
     setStorageAdapter(null)
     setStorageKey('')
+    setOnStorageError(null)
+    setAutoSaveDelay(0)
+    // Reset feature flags to defaults — clears any runtime overrides.
+    featureMap.clear()
+    Object.entries(FEATURE_DEFAULTS).forEach(([k, v]) => featureMap.set(k as FeatureFlag, v))
+    const snap = featureSnapshot()
+    featureListeners.forEach(l => l(snap))
     setIndicatorProvider(null)
     setScriptProvider(null)
     setChartModified(false)
@@ -382,6 +453,9 @@ export function createChartStore(): ChartStore {
     selectedOverlayPosition, setSelectedOverlayPosition, subscribeSelectedOverlayPosition,
     storageAdapter, setStorageAdapter, subscribeStorageAdapter,
     storageKey, setStorageKey, subscribeStorageKey,
+    onStorageError, setOnStorageError,
+    autoSaveDelay, setAutoSaveDelay,
+    isFeatureEnabled, setFeatureEnabled, subscribeFeatures,
     indicatorProvider, setIndicatorProvider, subscribeIndicatorProvider,
     scriptProvider, setScriptProvider, subscribeScriptProvider,
     chartModified, setChartModified, subscribeChartModified,

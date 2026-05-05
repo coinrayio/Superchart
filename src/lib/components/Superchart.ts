@@ -22,7 +22,8 @@ import type {
 import { utils, dispose } from 'klinecharts'
 import { SuperchartComponent } from './SuperchartComponent'
 import type { Period, SymbolInfo } from '../types/chart'
-import type { StorageAdapter } from '../types/storage'
+import type { StorageAdapter, StorageEntry } from '../types/storage'
+import type { FeatureFlag } from '../features/types'
 import type { IndicatorProvider } from '../types/indicator'
 import type { ScriptProvider } from '../types/script'
 import type { OverlayProperties } from '../types/overlay'
@@ -120,6 +121,12 @@ export interface SuperchartOptions {
   storageAdapter?: StorageAdapter
   /** Storage key for this chart (default: symbol.ticker) */
   storageKey?: string
+  /**
+   * Called when a storage save fails after the merge-retry loop has been
+   * exhausted (default 3 attempts) or when a non-conflict adapter error is
+   * thrown. Use to surface persistence errors in your UI.
+   */
+  onStorageError?: (err: Error) => void
 
   // Optional - Initial state
   /** Initial main indicators (on candle pane) */
@@ -144,17 +151,41 @@ export interface SuperchartOptions {
   scriptProvider?: ScriptProvider
 
   // Optional - UI toggles
-  /** Show drawing toolbar (default: false) */
+  /**
+   * Initial *visibility state* of the drawing toolbar (default: false). The
+   * user can toggle this at runtime via the period-bar menu button.
+   *
+   * Distinct from the `drawing_bar` feature flag, which controls whether
+   * the feature is *available* at all. When the flag is disabled, the
+   * drawing toolbar (and its toggle button) are hidden regardless of
+   * this option.
+   */
   drawingBarVisible?: boolean
   /** Show volume indicator (default: true) */
   showVolume?: boolean
   /**
-   * Show the period bar (default: true). When false the bar is not rendered
-   * and the chart canvas reclaims the space. Per-button hide / disable is
-   * done by the consumer via CSS on `[data-button="<id>"]` — see the feature
-   * doc for button ids and example rules.
+   * Initial *visibility state* of the period bar (default: true). When
+   * false the bar is not rendered and the chart canvas reclaims the space.
+   * Per-button hide / disable is done by the consumer via CSS on
+   * `[data-button="<id>"]` — see the feature doc for button ids.
+   *
+   * Distinct from the `period_bar` feature flag, which controls whether
+   * the feature is available at all.
    */
   periodBarVisible?: boolean
+
+  // Feature flags (Ticket 3 of PERSISTENCE_ROADMAP.md)
+  /** Features to force-enable. Overrides defaults; loses to `disabledFeatures` if a flag appears in both. */
+  enabledFeatures?: FeatureFlag[]
+  /** Features to force-disable. Overrides defaults and `enabledFeatures`. */
+  disabledFeatures?: FeatureFlag[]
+  /**
+   * Auto-save debounce in milliseconds. 0 (default) saves on every mutation.
+   * Set to e.g. 1500 to collapse rapid edits into one save after 1.5s idle.
+   * Mirrors TradingView's `auto_save_delay`. Companion to the
+   * `auto_save_state` feature flag.
+   */
+  autoSaveDelay?: number
 
   // Optional - Available options
   /** Available period options */
@@ -217,10 +248,21 @@ export interface SuperchartApi {
   resize: () => void
   /** Get screenshot URL */
   getScreenshotUrl: (type?: 'png' | 'jpeg', backgroundColor?: string) => string
-  /** Create an overlay */
-  createOverlay: (overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> }, paneId?: string) => string | null
+  /** Create an overlay. Pass `save: false` to opt this overlay out of persistence (renders but isn't written to the StorageAdapter). */
+  createOverlay: (overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean }, paneId?: string) => string | null
   /** Set overlay mode */
   setOverlayMode: (mode: OverlayMode) => void
+
+  // Persistence — explicit imperative API (Ticket 2 of PERSISTENCE_ROADMAP.md)
+  /** Force-save current chart state to the StorageAdapter (last-write-wins). No-op if no adapter is configured. */
+  saveState: () => Promise<void>
+  /** Re-fetch saved state from the adapter and apply to the chart (overlays, indicators, styles). Best invoked after the chart has mounted but before the user has interacted. */
+  loadState: () => Promise<void>
+  /** Delete the saved record for the current `storageKey`. Does NOT clear the chart visually — the chart keeps its current overlays/indicators in memory. */
+  clearState: () => Promise<void>
+  /** List saved chart-state entries from the adapter. Returns `[]` when no adapter is configured or the adapter doesn't implement `list`. */
+  listSavedStates: (prefix?: string) => Promise<StorageEntry[]>
+
   /** Get the backend indicators API (null if no IndicatorProvider configured) */
   getBackendIndicators: () => UseBackendIndicatorsReturn | null
   /**
@@ -334,8 +376,26 @@ export default class Superchart implements SuperchartApi {
     this._store.setLocale(options.locale ?? 'en-US')
     this._store.setTimezone(options.timezone ?? 'Etc/UTC')
     this._store.setMainIndicators(options.mainIndicators ?? [])
+
+    // Feature flags (developer-controlled "is this feature available?").
+    // Distinct from runtime visibility state below.
+    if (options.enabledFeatures) {
+      for (const f of options.enabledFeatures) this._store.setFeatureEnabled(f, true)
+    }
+    if (options.disabledFeatures) {
+      // disabledFeatures wins when a flag is in both arrays (matches TV).
+      for (const f of options.disabledFeatures) this._store.setFeatureEnabled(f, false)
+    }
+
+    // Initial visibility state (user-toggleable at runtime). Orthogonal
+    // to the flag system — the flag controls whether the toggle is even
+    // available; this option seeds the state when it is.
     this._store.setDrawingBarVisible(options.drawingBarVisible ?? false)
     this._store.setPeriodBarVisible(options.periodBarVisible ?? true)
+
+    if (options.autoSaveDelay !== undefined) {
+      this._store.setAutoSaveDelay(options.autoSaveDelay)
+    }
 
     this._store.setDebug(options.debug ?? true)
 
@@ -343,6 +403,9 @@ export default class Superchart implements SuperchartApi {
       this._store.setStorageAdapter(options.storageAdapter)
     }
     this._store.setStorageKey(options.storageKey ?? options.symbol.ticker)
+    if (options.onStorageError) {
+      this._store.setOnStorageError(options.onStorageError)
+    }
 
     if (options.indicatorProvider) {
       this._store.setIndicatorProvider(options.indicatorProvider)
@@ -655,7 +718,7 @@ export default class Superchart implements SuperchartApi {
   }
 
   createOverlay(
-    overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> },
+    overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean },
     paneId?: string
   ): string | null {
     return this._api?.createOverlay(overlay, paneId) ?? null
@@ -663,6 +726,24 @@ export default class Superchart implements SuperchartApi {
 
   setOverlayMode(mode: OverlayMode): void {
     this._api?.setOverlayMode(mode)
+  }
+
+  // ---- Persistence — explicit imperative API (Ticket 2) ----
+
+  async saveState(): Promise<void> {
+    return this._api?.saveState() ?? Promise.resolve()
+  }
+
+  async loadState(): Promise<void> {
+    return this._api?.loadState() ?? Promise.resolve()
+  }
+
+  async clearState(): Promise<void> {
+    return this._api?.clearState() ?? Promise.resolve()
+  }
+
+  async listSavedStates(prefix?: string): Promise<StorageEntry[]> {
+    return (await this._api?.listSavedStates(prefix)) ?? []
   }
 
   getBackendIndicators(): UseBackendIndicatorsReturn | null {
@@ -679,6 +760,22 @@ export default class Superchart implements SuperchartApi {
 
   setPeriodBarVisible(visible: boolean): void {
     this._api?.setPeriodBarVisible(visible)
+  }
+
+  // ---- Feature flags (Ticket 3) ----
+
+  /** Returns true if `flag` is currently enabled for this Superchart instance. */
+  isFeatureEnabled(flag: FeatureFlag): boolean {
+    return this._store.isFeatureEnabled(flag)
+  }
+
+  /**
+   * Toggle a feature at runtime. Components subscribed via `useFeature(flag)`
+   * (or directly to `subscribeFeatures`) re-render to reflect the change —
+   * no remount required.
+   */
+  setFeatureEnabled(flag: FeatureFlag, enabled: boolean): void {
+    this._store.setFeatureEnabled(flag, enabled)
   }
 
   createButton(options?: ToolbarButtonOptions): HTMLElement {

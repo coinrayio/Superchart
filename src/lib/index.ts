@@ -70,7 +70,39 @@ export type {
   ToolbarDropdownSeparator,
 } from './components/Superchart'
 export type { Period, SymbolInfo, ProChart } from './types/chart'
-export type { StorageAdapter, ChartState } from './types/storage'
+export type {
+  StorageAdapter,
+  ChartState,
+  StorageRecord,
+  StorageWriteResult,
+  StorageEntry,
+  StudyTemplate,
+  StudyTemplateMeta,
+  DrawingTemplate,
+  DrawingTemplateMeta,
+  SavedIndicator,
+  ChartPreferences,
+} from './types/storage'
+export { SYSTEM_STUDY_TEMPLATES } from './templates/systemStudyTemplates'
+export { SYSTEM_DRAWING_TEMPLATES } from './templates/systemDrawingTemplates'
+export {
+  StorageConflictError,
+  CHART_STATE_VERSION,
+  createEmptyChartState,
+  migrateChartState,
+  mergeChartStates,
+} from './types/storage'
+
+// Storage adapter reference implementations
+export { LocalStorageAdapter } from './storage/localStorage'
+export type { LocalStorageAdapterOptions } from './storage/localStorage'
+export { HttpStorageAdapter } from './storage/http'
+export type { HttpStorageAdapterOptions } from './storage/http'
+
+// Feature flags (Ticket 3 of PERSISTENCE_ROADMAP.md)
+export type { FeatureFlag } from './features/types'
+export { FEATURE_DEFAULTS } from './features/defaults'
+export { useFeature } from './features/useFeature'
 export type { IndicatorProvider, IndicatorDefinition } from './types/indicator'
 export type { UseBackendIndicatorsReturn } from './hooks/useBackendIndicators'
 export type { OverlayProperties, ProOverlay, ProOverlayCreate, ProOverlayTemplate } from './types/overlay'

@@ -11,6 +11,7 @@
 import { useState, useEffect, useSyncExternalStore } from 'react'
 import { Color, Input, Select, Modal, type SelectDataSourceItem } from '../../component'
 import { useChartState } from '../../hooks/useChartState'
+import { useDrawingTemplates } from '../../hooks/useDrawingTemplates'
 import { setDefaultForOverlay } from '../../store/overlayDefaultStyles'
 import { useChartStore } from '../../store/chartStoreContext'
 import {
@@ -142,13 +143,27 @@ function OverlaySettingModal() {
     const savedVisibility = store.getOverlayTimeframeVisibility(overlay.id)
     setLocalVisibility(savedVisibility ?? defaultTimeframeVisibility())
 
-    // Initialize extend state from overlay.extendData
-    const ext = overlay.extendData as { extendLeft?: boolean; extendRight?: boolean } | undefined
+    // Initialize extend state and applied-template-name from extendData
+    const ext = overlay.extendData as
+      | { extendLeft?: boolean; extendRight?: boolean; templateName?: string }
+      | undefined
     setLocalExtend({
       extendLeft: ext?.extendLeft === true,
       extendRight: ext?.extendRight === true,
     })
+    setSelectedTemplateName(ext?.templateName ?? '')
   }, [overlay?.id])
+
+  // ---- Drawing templates (Ticket 5) ----
+  // Same shared hook as the floating popup and right-click menu. MUST be
+  // called before the early return below — React's rules-of-hooks forbid
+  // conditional hook invocation, and `overlay` is null between renders.
+  const templates = useDrawingTemplates(overlay ?? null, (props) => {
+    if (!overlay) return
+    setLocalProps(prev => ({ ...prev, ...(props as Record<string, unknown>) }))
+    modifyOverlayProperties(overlay.id, props)
+  })
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('')
 
   if (!overlay) return null
 
@@ -283,10 +298,12 @@ function OverlaySettingModal() {
   const handleExtendChange = (field: 'extendLeft' | 'extendRight', checked: boolean) => {
     const updated = { ...localExtend, [field]: checked }
     setLocalExtend(updated)
-    // Apply visually by setting extendData on the overlay
+    // Apply visually by setting extendData on the overlay. Merge with the
+    // existing extendData so other keys (e.g. templateName) survive.
     const chartInstance = store.instanceApi()
     if (chartInstance) {
-      chartInstance.overrideOverlay({ id: overlay.id, extendData: updated })
+      const existing = (overlay.extendData as Record<string, unknown> | undefined) ?? {}
+      chartInstance.overrideOverlay({ id: overlay.id, extendData: { ...existing, ...updated } })
       // Persist: re-read live overlay and sync
       const liveOverlay = chartInstance.getOverlays({ id: overlay.id })[0]
       if (liveOverlay) {
@@ -301,6 +318,27 @@ function OverlaySettingModal() {
   const handleApplyAsDefault = () => {
     setDefaultForOverlay(overlayName, localProps as DeepPartial<OverlayProperties>)
   }
+
+  const handleTemplateSelect = (name: string) => {
+    setSelectedTemplateName(name)
+    if (name) void templates.apply(name)
+  }
+
+  const handleSaveAsTemplate = async () => {
+    // eslint-disable-next-line no-alert
+    const name = window.prompt('Save drawing template as…', '')?.trim()
+    if (!name) return
+    await templates.save(name, localProps as DeepPartial<OverlayProperties>)
+    setSelectedTemplateName(name)
+  }
+
+  const handleDeleteSelectedTemplate = async () => {
+    if (!selectedTemplateName) return
+    await templates.remove(selectedTemplateName)
+    setSelectedTemplateName('')
+  }
+
+  const selectedTemplateMeta = templates.list.find(t => t.name === selectedTemplateName)
 
   const handleClose = () => {
     store.setShowOverlaySetting(false)
@@ -333,6 +371,60 @@ function OverlaySettingModal() {
         {/* Style tab */}
         {activeTab === 'style' && (
           <div className="content">
+            {/* Drawing-template controls (Ticket 5) — visible when the
+                drawing_templates flag is on AND the active adapter
+                implements the four template methods. */}
+            {templates.enabled && (
+              <div className="section">
+                <div className="section-title">Template</div>
+                <div className="component">
+                  <span>Apply</span>
+                  <Select
+                    style={{ width: 200 }}
+                    value={selectedTemplateName || '(none)'}
+                    dataSource={[
+                      { key: '', text: '(none)' },
+                      ...templates.list.map(t => ({
+                        key: t.name,
+                        text: `${t.name}${t.system ? ' (system)' : ''}`,
+                      })),
+                    ]}
+                    onSelected={(item) => {
+                      const key = typeof item === 'string' ? item : (item as SelectDataSourceItem).key
+                      handleTemplateSelect(String(key))
+                    }}
+                  />
+                </div>
+                <div className="component">
+                  <span></span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="level-add"
+                      style={{ width: 'auto', flex: 1, marginTop: 0 }}
+                      onClick={() => { void handleSaveAsTemplate() }}
+                    >
+                      Save as…
+                    </button>
+                    <button
+                      type="button"
+                      className="level-add"
+                      style={{ width: 'auto', flex: 1, marginTop: 0, opacity: !selectedTemplateName || selectedTemplateMeta?.system ? 0.4 : 1 }}
+                      disabled={!selectedTemplateName || selectedTemplateMeta?.system}
+                      onClick={() => { void handleDeleteSelectedTemplate() }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {templates.error && (
+                  <div style={{ fontSize: 11, color: 'var(--superchart-danger-color, #ff4d4f)' }}>
+                    {templates.error}
+                  </div>
+                )}
+              </div>
+            )}
+
             {schema.sections.map(section => (
               <div key={section.title} className="section">
                 <div className="section-title">{section.title}</div>
