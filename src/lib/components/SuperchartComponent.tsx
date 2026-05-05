@@ -120,7 +120,6 @@ function SuperchartInner(props: SuperchartComponentProps) {
   const locale = useStoreValue(store.locale, store.subscribeLocale)
   const loadingVisible = useStoreValue(store.loadingVisible, store.subscribeLoadingVisible)
   const drawingBarVisible = useStoreValue(store.drawingBarVisible, store.subscribeDrawingBarVisible)
-  const periodBarVisible = useStoreValue(store.periodBarVisible, store.subscribePeriodBarVisible)
   const selectedOverlay = useStoreValue(store.selectedOverlay, store.subscribeSelectedOverlay)
   const overlayPopupVisible = useStoreValue(store.showOverlayPopup, store.subscribeShowOverlayPopup)
   const overlaySettingVisible = useStoreValue(store.showOverlaySetting, store.subscribeShowOverlaySetting)
@@ -395,7 +394,6 @@ function SuperchartInner(props: SuperchartComponentProps) {
         setReadOnlyEditorVisible(false)
         pendingCloneCodeRef.current = ''
       },
-      setPeriodBarVisible: (visible) => store.setPeriodBarVisible(visible),
       createButton: (options) => {
         const container = options?.align === 'left'
           ? toolbarLeftRef.current
@@ -521,7 +519,7 @@ function SuperchartInner(props: SuperchartComponentProps) {
       data-theme={theme}
     >
       {/* Period Bar - Main toolbar - only render when we have data */}
-      {periodBarFeature && periodBarVisible && symbol && period && (
+      {periodBarFeature && symbol && period && (
         <PeriodBar
         locale={locale}
         symbol={symbol}

@@ -163,16 +163,6 @@ export interface SuperchartOptions {
   drawingBarVisible?: boolean
   /** Show volume indicator (default: true) */
   showVolume?: boolean
-  /**
-   * Initial *visibility state* of the period bar (default: true). When
-   * false the bar is not rendered and the chart canvas reclaims the space.
-   * Per-button hide / disable is done by the consumer via CSS on
-   * `[data-button="<id>"]` — see the feature doc for button ids.
-   *
-   * Distinct from the `period_bar` feature flag, which controls whether
-   * the feature is available at all.
-   */
-  periodBarVisible?: boolean
 
   // Feature flags (Ticket 3 of PERSISTENCE_ROADMAP.md)
   /** Features to force-enable. Overrides defaults; loses to `disabledFeatures` if a flag appears in both. */
@@ -274,8 +264,6 @@ export interface SuperchartApi {
   openScriptEditor: (options?: { initialCode?: string; readOnly?: boolean }) => void
   /** Programmatically close the script editor panel */
   closeScriptEditor: () => void
-  /** Show or hide the entire period bar. */
-  setPeriodBarVisible: (visible: boolean) => void
   /**
    * Add a custom button to the period bar toolbar.
    * Returns the created HTMLButtonElement — set innerHTML, add event listeners, or apply classes freely.
@@ -391,7 +379,6 @@ export default class Superchart implements SuperchartApi {
     // to the flag system — the flag controls whether the toggle is even
     // available; this option seeds the state when it is.
     this._store.setDrawingBarVisible(options.drawingBarVisible ?? false)
-    this._store.setPeriodBarVisible(options.periodBarVisible ?? true)
 
     if (options.autoSaveDelay !== undefined) {
       this._store.setAutoSaveDelay(options.autoSaveDelay)
@@ -756,10 +743,6 @@ export default class Superchart implements SuperchartApi {
 
   closeScriptEditor(): void {
     this._api?.closeScriptEditor()
-  }
-
-  setPeriodBarVisible(visible: boolean): void {
-    this._api?.setPeriodBarVisible(visible)
   }
 
   // ---- Feature flags (Ticket 3) ----

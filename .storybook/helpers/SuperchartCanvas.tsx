@@ -36,7 +36,6 @@ interface Props {
   onPeriodChange?: (period: Period) => void
   onVisibleRangeChange?: (range: VisibleTimeRange) => void
   visibleRange?: VisibleTimeRange | null
-  periodBarVisible?: boolean
   /** Inline CSS appended to a `<style>` tag, scoped under the container. */
   extraCss?: string
 }
@@ -51,7 +50,6 @@ export function SuperchartCanvas({
   onSymbolChange,
   onPeriodChange,
   onVisibleRangeChange,
-  periodBarVisible = true,
   extraCss,
 }: Props) {
   const [theme, setTheme] = useState<"dark" | "light">(themeProp)
@@ -92,7 +90,6 @@ export function SuperchartCanvas({
       dataLoader,
       theme,
       debug: false,
-      periodBarVisible,
       onSymbolChange: (s) => {
         chartSetSymbol.current = s.ticker
         onSymbolChangeRef.current?.(s)
@@ -174,12 +171,6 @@ export function SuperchartCanvas({
     if (!mountedRef.current || !superchartRef.current) return
     superchartRef.current.setTheme(theme)
   }, [theme])
-
-  // Sync period-bar visibility
-  useEffect(() => {
-    if (!mountedRef.current || !superchartRef.current) return
-    superchartRef.current.setPeriodBarVisible(periodBarVisible)
-  }, [periodBarVisible])
 
   if (!TOKEN) {
     return (

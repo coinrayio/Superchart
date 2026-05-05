@@ -25,6 +25,8 @@ export type FeatureFlag =
   | 'period_bar'
   | 'screenshot_button'
   | 'fullscreen_button'
+  | 'settings_button'
+  | 'timezone_button'
   | 'symbol_search'
   | 'period_picker'
   | 'indicator_picker'

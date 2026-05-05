@@ -134,11 +134,6 @@ export interface ChartStore {
   setFullScreen: (value: boolean) => void
   subscribeFullScreen: (listener: Listener<boolean>) => () => void
 
-  // Period-bar visibility
-  periodBarVisible: () => boolean
-  setPeriodBarVisible: (value: boolean) => void
-  subscribePeriodBarVisible: (listener: Listener<boolean>) => () => void
-
   // Indicators
   mainIndicators: () => string[]
   setMainIndicators: (value: string[]) => void
@@ -295,7 +290,6 @@ export function createChartStore(): ChartStore {
   const [loadingVisible, setLoadingVisible, subscribeLoadingVisible] = createSignal<boolean>(false)
   const [drawingBarVisible, setDrawingBarVisible, subscribeDrawingBarVisible] = createSignal<boolean>(false)
   const [fullScreen, setFullScreen, subscribeFullScreen] = createSignal<boolean>(false)
-  const [periodBarVisible, setPeriodBarVisible, subscribePeriodBarVisible] = createSignal<boolean>(true)
   const [mainIndicators, setMainIndicators, subscribeMainIndicators] = createSignal<string[]>([])
   const [subIndicators, setSubIndicators, subscribeSubIndicators] = createSignal<Record<string, string>>({})
   const [selectedOverlay, setSelectedOverlay, subscribeSelectedOverlay] = createSignal<Nullable<Overlay>>(null)
@@ -402,7 +396,6 @@ export function createChartStore(): ChartStore {
     setLoadingVisible(false)
     setDrawingBarVisible(false)
     setFullScreen(false)
-    setPeriodBarVisible(true)
     setMainIndicators([])
     setSubIndicators({})
     setSelectedOverlay(null)
@@ -446,7 +439,6 @@ export function createChartStore(): ChartStore {
     loadingVisible, setLoadingVisible, subscribeLoadingVisible,
     drawingBarVisible, setDrawingBarVisible, subscribeDrawingBarVisible,
     fullScreen, setFullScreen, subscribeFullScreen,
-    periodBarVisible, setPeriodBarVisible, subscribePeriodBarVisible,
     mainIndicators, setMainIndicators, subscribeMainIndicators,
     subIndicators, setSubIndicators, subscribeSubIndicators,
     selectedOverlay, setSelectedOverlay, subscribeSelectedOverlay,

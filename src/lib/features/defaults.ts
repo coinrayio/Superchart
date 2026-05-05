@@ -15,6 +15,8 @@ export const FEATURE_DEFAULTS: Record<FeatureFlag, boolean> = {
   period_bar: true,
   screenshot_button: true,
   fullscreen_button: true,
+  settings_button: true,
+  timezone_button: true,
   symbol_search: true,
   period_picker: true,
   indicator_picker: true,

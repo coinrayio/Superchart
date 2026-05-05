@@ -23,6 +23,8 @@ const FLAG_CATEGORY: Record<FeatureFlag, string> = {
   period_bar: "Toolbars / chrome",
   screenshot_button: "Toolbars / chrome",
   fullscreen_button: "Toolbars / chrome",
+  settings_button: "Toolbars / chrome",
+  timezone_button: "Toolbars / chrome",
   symbol_search: "Toolbars / chrome",
   period_picker: "Toolbars / chrome",
   indicator_picker: "Toolbars / chrome",
